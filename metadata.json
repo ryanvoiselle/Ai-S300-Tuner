@@ -1,0 +1,5 @@
+{
+  "name": "Hondata AI Tuning Assistant",
+  "description": "A desktop application concept that accepts S300 Hondata datalogs, analyzes them with AI, and provides suggestions to modify .skl base maps.",
+  "requestFramePermissions": []
+}
