@@ -8,11 +8,22 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder"
+    "build": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --define:process.env.NODE_ENV='\"development\"'",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "papaparse": "^5.4.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "recharts": "^2.12.7"
   },
   "devDependencies": {
+    "@types/papaparse": "^5.3.14",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
     "electron": "^28.0.0",
-    "electron-builder": "^24.9.1"
+    "electron-builder": "^24.9.1",
+    "esbuild": "^0.20.2"
   },
   "build": {
     "appId": "com.example.hondataaituner",
@@ -20,7 +31,8 @@
     "files": [
       "**/*",
       "!install.ps1",
-      "!README.md"
+      "!README.md",
+      "dist/bundle.js"
     ],
     "win": {
       "target": [

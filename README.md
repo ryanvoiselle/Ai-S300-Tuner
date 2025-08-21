@@ -66,11 +66,15 @@ After the script finishes, you will have everything you need. Simply launch the 
 
 ### Running in Development Mode
 
-To run the app with live reloading and access to developer tools:
+1.  **Build the application:** This step is required to compile the TypeScript/React code into JavaScript that Electron can understand.
+    ```sh
+    npm run build
+    ```
 
-```sh
-npm start
-```
+2.  **Start the application:**
+    ```sh
+    npm start
+    ```
 
 ### Building the Executable
 

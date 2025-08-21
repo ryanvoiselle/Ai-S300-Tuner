@@ -6,7 +6,6 @@ function createWindow() {
     width: 1280,
     height: 900,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
       // In a real app, you would use a preload script for security.
       // For this simple example, we are keeping it straightforward.
       nodeIntegration: false,
