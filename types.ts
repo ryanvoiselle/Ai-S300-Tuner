@@ -2,6 +2,17 @@ export type EngineType = 'na' | 'boosted';
 
 export type SimulationScenario = 'leanWot' | 'richCruise' | 'highDuty' | 'knock';
 
+export type AIProvider = 'local' | 'gemini';
+
+export interface AuthStatus {
+  isSignedIn: boolean;
+  user?: {
+    name: string;
+    email: string;
+    picture: string;
+  }
+}
+
 export interface Adjustment {
   rpmRange: string;
   loadCondition: string;

@@ -7,10 +7,10 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { Disclaimer } from './components/Disclaimer';
 import { ECUConnector } from './components/ECUConnector';
 import { Simulator } from './components/Simulator';
-import { AIModelManager } from './components/AIModelManager';
-import { getTuningSuggestions } from './services/localAiService';
+import { AIManager } from './components/AIManager';
+import { getTuningSuggestions } from './services/aiService';
 import { generateSimulatedDatalog } from './services/simulationService';
-import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario, AIModelStatus } from './types';
+import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario, AIModelStatus, AIProvider, AuthStatus } from './types';
 import Papa from 'papaparse';
 
 // TypeScript augmentations for the preload script API
@@ -21,8 +21,11 @@ declare global {
       getInitialModelStatus: () => Promise<AIModelStatus>;
       downloadModel: () => Promise<void>;
       onDownloadProgress: (callback: (progress: { percent: number; totalBytes: number; }) => void) => void;
-      runInference: (prompt: string) => Promise<string>;
+      runInference: (args: { provider: AIProvider; prompt?: string; systemPrompt?: string, userPrompt?: string }) => Promise<string>;
       onModelLoadAttemptComplete: (callback: (status: AIModelStatus) => void) => void;
+      googleSignIn: () => Promise<AuthStatus>;
+      googleSignOut: () => Promise<AuthStatus>;
+      getAuthStatus: () => Promise<AuthStatus>;
     };
   }
 }
@@ -38,7 +41,14 @@ const App: React.FC = () => {
   const [datalogData, setDatalogData] = useState<DatalogRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [isModelReady, setIsModelReady] = useState<boolean>(false);
+  
+  // AI Provider State
+  const [aiProvider, setAiProvider] = useState<AIProvider>('local');
+  const [isLocalModelReady, setIsLocalModelReady] = useState<boolean>(false);
+  const [authStatus, setAuthStatus] = useState<AuthStatus>({ isSignedIn: false });
+
+  const isAnalyzeReady = aiProvider === 'local' ? isLocalModelReady : authStatus.isSignedIn;
+
 
   const processDatalogContent = (content: string) => {
     if (!content.includes('RPM') || !content.includes('MAP')) {
@@ -104,8 +114,12 @@ const App: React.FC = () => {
       setError('Please upload or generate a datalog file first.');
       return;
     }
-     if (!isModelReady) {
-      setError('The AI model is not ready. Please download it or restart the application if the model failed to load.');
+     if (!isAnalyzeReady) {
+      if (aiProvider === 'local') {
+        setError('The Local AI model is not ready. Please download it or restart the application if the model failed to load.');
+      } else {
+        setError('Please sign in with Google to use the Gemini AI.');
+      }
       return;
     }
     setIsLoading(true);
@@ -113,7 +127,7 @@ const App: React.FC = () => {
     setTuningSuggestions(null);
 
     try {
-      const suggestions = await getTuningSuggestions(datalogContent, engineType, engineSetup, turboSetup);
+      const suggestions = await getTuningSuggestions(aiProvider, datalogContent, engineType, engineSetup, turboSetup);
       setTuningSuggestions(suggestions);
     } catch (e) {
       console.error(e);
@@ -125,7 +139,7 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [datalogContent, engineType, engineSetup, turboSetup, isModelReady]);
+  }, [datalogContent, engineType, engineSetup, turboSetup, isAnalyzeReady, aiProvider]);
 
   return (
     <div className="min-h-screen bg-charcoal text-gray-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -150,13 +164,20 @@ const App: React.FC = () => {
                 />
                 <button
                     onClick={handleAnalyze}
-                    disabled={!datalogContent || isLoading || !isModelReady}
+                    disabled={!datalogContent || isLoading || !isAnalyzeReady}
                     className="w-full mt-6 bg-raceRed-500 hover:bg-raceRed-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center shadow-lg shadow-raceRed-500/20"
                 >
                     {isLoading ? <LoadingSpinner /> : 'Analyze Datalog'}
                 </button>
             </div>
-            <AIModelManager isModelReady={isModelReady} setIsModelReady={setIsModelReady} />
+            <AIManager
+              provider={aiProvider}
+              onProviderChange={setAiProvider}
+              isLocalModelReady={isLocalModelReady}
+              setIsLocalModelReady={setIsLocalModelReady}
+              authStatus={authStatus}
+              setAuthStatus={setAuthStatus}
+            />
             <Simulator onGenerate={handleGenerateSimulation} isLoading={isLoading} />
             <ECUConnector />
           </div>
@@ -170,7 +191,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col items-center justify-center h-full text-center">
                         <LoadingSpinner />
                         <p className="mt-4 text-lg text-gray-300">Analyzing datalog...</p>
-                        <p className="text-sm text-gray-400">The local AI is reviewing your data against your hardware setup.</p>
+                        <p className="text-sm text-gray-400">{aiProvider === 'local' ? 'The local AI is reviewing your data...' : 'Contacting Google Gemini API...'}</p>
                     </div>
                 )}
 
