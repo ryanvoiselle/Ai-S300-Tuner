@@ -1,5 +1,0 @@
-{
-  "name": "Hondata AI Tuning Assistant",
-  "description": "A web application that accepts S300 Hondata datalogs, analyzes them with Google's Gemini AI, and provides suggestions to modify .skl base maps.",
-  "requestFramePermissions": []
-}
