@@ -1,23 +1,36 @@
 {
   "name": "hondata-ai-tuning-assistant",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
+  "version": "1.0.0",
+  "description": "A desktop application that uses a local AI to analyze Hondata S300 datalogs and provide tuning advice.",
+  "main": "electron.js",
+  "homepage": "./",
+  "author": "YourName",
+  "license": "MIT",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "react": "^19.1.1",
-    "@google/genai": "^1.15.0",
-    "papaparse": "^5.5.3",
-    "recharts": "^2.12.7",
-    "react-dom": "^19.1.1"
+    "start": "electron .",
+    "dist": "electron-builder"
   },
   "devDependencies": {
-    "@types/node": "^22.14.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  },
+  "build": {
+    "appId": "com.example.hondataaituner",
+    "productName": "HondataAITuningAssistant",
+    "files": [
+      "**/*",
+      "!install.ps1",
+      "!README.md"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

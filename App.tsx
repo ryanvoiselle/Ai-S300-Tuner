@@ -6,7 +6,7 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { Disclaimer } from './components/Disclaimer';
 import { ECUConnector } from './components/ECUConnector';
 import { Simulator } from './components/Simulator';
-import { getTuningSuggestions, checkLocalAiStatus } from './services/geminiService';
+import { getTuningSuggestions, checkLocalAiStatus } from './services/localAiService';
 import { generateSimulatedDatalog } from './services/simulationService';
 import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario } from './types';
 import Papa from 'papaparse';
