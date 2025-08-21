@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useMemo } from 'react';
 import type { TuningSuggestions, Adjustment, Observation, DatalogRow, EngineType } from '../types';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';
 import { ExportActions } from './TuneExporter';
@@ -30,12 +31,12 @@ const ObservationCard: React.FC<{ observation: Observation }> = ({ observation }
 );
 
 const DatalogChart: React.FC<{data: DatalogRow[]}> = ({data}) => {
-    const chartData = data.map(row => ({
+    const chartData = useMemo(() => data.map(row => ({
         RPM: row.RPM,
         AFR: row.AFR,
         MAP: row.MAP,
         Ignition: row['Ignition Total']
-    }));
+    })), [data]);
 
     return (
         <div className="mb-8">

@@ -1,7 +1,50 @@
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const util = require('util'); // For log formatting
 const { download } = require('electron-dl');
+
+// --- Start of Logging Implementation ---
+// Setup a log file in the user's data directory.
+const logFilePath = path.join(app.getPath('userData'), 'app.log');
+// Use a write stream to append to the log file.
+const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
+
+// Keep the original console functions.
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+// Override console.log
+console.log = function (...args) {
+    // Format the message with a timestamp and log level.
+    const message = `[${new Date().toISOString()}] [INFO] ${util.format.apply(null, args)}\n`;
+    // Write to the log file.
+    logStream.write(message);
+    // Also write to the original console (useful for development).
+    originalConsoleLog.apply(console, args);
+};
+
+// Override console.error
+console.error = function (...args) {
+    // Format the message with a timestamp and log level.
+    const message = `[${new Date().toISOString()}] [ERROR] ${util.format.apply(null, args)}\n`;
+    // Write to the log file.
+    logStream.write(message);
+    // Also write to the original console.
+    originalConsoleError.apply(console, args);
+};
+
+// Catch unhandled exceptions and log them before crashing.
+process.on('uncaughtException', (error) => {
+    console.error('--- UNCAUGHT EXCEPTION ---');
+    console.error(error);
+    console.error('--- END UNCAUGHT EXCEPTION ---');
+    // The log will be written before the process terminates.
+    // It's important to exit after an uncaught exception as the app state is unknown.
+    process.exit(1);
+});
+// --- End of Logging Implementation ---
+
 
 let win;
 let LlamaModel, LlamaContext, LlamaChatSession;
