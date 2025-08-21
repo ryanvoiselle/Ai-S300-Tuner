@@ -1,42 +1,56 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
-type ModelStatus = 'checking' | 'not_found' | 'downloading' | 'ready' | 'error';
+type ModelStatus = 'checking' | 'not_found' | 'downloading' | 'ready' | 'error' | 'load_failed';
 
 export const AIModelManager: React.FC<{isModelReady: boolean; setIsModelReady: (isReady: boolean) => void;}> = ({isModelReady, setIsModelReady}) => {
     const [status, setStatus] = useState<ModelStatus>('checking');
     const [progress, setProgress] = useState(0);
     const [totalSize, setTotalSize] = useState(0);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     useEffect(() => {
-        window.electronAPI.checkModelExists().then(exists => {
-            if (exists) {
+        window.electronAPI.getInitialModelStatus().then(status => {
+            if (status.loaded) {
                 setStatus('ready');
                 setIsModelReady(true);
+            } else if (status.exists) {
+                setStatus('load_failed');
+                setLoadError(status.error || 'The model file exists but could not be loaded.');
+                setIsModelReady(false);
             } else {
                 setStatus('not_found');
                 setIsModelReady(false);
             }
         });
         
-        window.electronAPI.onDownloadProgress(prog => {
+        const onProgress = (prog: { percent: number; totalBytes: number; }) => {
            setProgress(prog.percent);
-           if (!totalSize) {
+           if (totalSize <= 0) {
              setTotalSize(prog.totalBytes);
            }
-        });
+        };
+
+        const onModelLoadComplete = (status: { loaded: boolean; error?: string }) => {
+             if (status.loaded) {
+                setStatus('ready');
+                setIsModelReady(true);
+            } else {
+                setStatus('error');
+                setLoadError(status.error || 'Failed to load the model after downloading.');
+                setIsModelReady(false);
+            }
+        };
+
+        window.electronAPI.onDownloadProgress(onProgress);
+        window.electronAPI.onModelLoadAttemptComplete(onModelLoadComplete);
 
     }, [setIsModelReady, totalSize]);
 
     const handleDownload = () => {
         setStatus('downloading');
-        window.electronAPI.downloadModel().then(() => {
-            setStatus('ready');
-            setIsModelReady(true);
-        }).catch(() => {
-            setStatus('error');
-            setIsModelReady(false);
-        });
+        // The listener will handle success or failure
+        window.electronAPI.downloadModel();
     }
 
     const formatBytes = (bytes: number) => {
@@ -49,7 +63,22 @@ export const AIModelManager: React.FC<{isModelReady: boolean; setIsModelReady: (
         <div className="bg-gray-900/50 border border-gray-700 p-4 rounded-lg shadow-lg h-fit backdrop-blur-sm">
             <h3 className="text-lg font-bold text-gray-200 mb-2">AI Model</h3>
             {status === 'checking' && <p className="text-gray-400">Checking for local model...</p>}
-            {status === 'error' && <p className="text-red-400">An error occurred during download. Please restart the app and try again.</p>}
+            {status === 'error' && (
+                <div>
+                    <p className="text-sm text-red-400 mb-2">
+                        <strong>Download Failed:</strong> {loadError || 'An error occurred during download.'}
+                    </p>
+                    <p className="text-xs text-gray-400">Please restart the app and try again.</p>
+                </div>
+            )}
+            {status === 'load_failed' && (
+                <div>
+                    <p className="text-sm text-red-400 mb-2">
+                        <strong>Model Load Failed:</strong> {loadError}
+                    </p>
+                    <p className="text-xs text-gray-400">The model file may be corrupted. Try restarting the application. If the problem persists, you may need to delete the model file from the app's data directory and download it again.</p>
+                </div>
+            )}
             
             {status === 'not_found' && (
                 <div>

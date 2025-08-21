@@ -10,7 +10,7 @@ import { Simulator } from './components/Simulator';
 import { AIModelManager } from './components/AIModelManager';
 import { getTuningSuggestions } from './services/localAiService';
 import { generateSimulatedDatalog } from './services/simulationService';
-import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario } from './types';
+import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario, AIModelStatus } from './types';
 import Papa from 'papaparse';
 
 // TypeScript augmentations for the preload script API
@@ -18,10 +18,11 @@ export {};
 declare global {
   interface Window {
     electronAPI: {
-      checkModelExists: () => Promise<boolean>;
+      getInitialModelStatus: () => Promise<AIModelStatus>;
       downloadModel: () => Promise<void>;
       onDownloadProgress: (callback: (progress: { percent: number; totalBytes: number; }) => void) => void;
       runInference: (prompt: string) => Promise<string>;
+      onModelLoadAttemptComplete: (callback: (status: AIModelStatus) => void) => void;
     };
   }
 }
@@ -104,7 +105,7 @@ const App: React.FC = () => {
       return;
     }
      if (!isModelReady) {
-      setError('The AI model is not ready. Please download it first.');
+      setError('The AI model is not ready. Please download it or restart the application if the model failed to load.');
       return;
     }
     setIsLoading(true);

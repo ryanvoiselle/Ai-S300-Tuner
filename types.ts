@@ -34,3 +34,9 @@ export interface DatalogRow {
   VTS?: number; // VTEC solenoid
   [key: string]: number | undefined; // Allow other numeric columns
 }
+
+export interface AIModelStatus {
+  exists: boolean;
+  loaded: boolean;
+  error?: string;
+}

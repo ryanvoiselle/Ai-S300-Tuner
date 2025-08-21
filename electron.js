@@ -62,6 +62,7 @@ let LlamaModel, LlamaContext, LlamaChatSession;
 let model;
 let context;
 let session;
+let modelLoadError = null; // Store any errors during model loading
 
 const modelName = 'Meta-Llama-3-8B-Instruct.Q4_K_M.gguf';
 const modelUrl = `https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/${modelName}`;
@@ -91,24 +92,26 @@ function cleanupAIResources() {
 }
 
 function loadModelAndCreateSession() {
-    // Ensure any previous instances are garbage collected before creating new ones.
     cleanupAIResources();
+    modelLoadError = null; // Reset error on new load attempt
 
     if (fs.existsSync(modelPath)) {
         try {
             console.log("Loading AI model...");
             model = new LlamaModel({ modelPath });
             console.log("AI model loaded. Creating context and session...");
-            // Increased context size to handle larger datalogs and prompts
             context = new LlamaContext({ model, contextSize: 8192 });
             session = new LlamaChatSession({ context });
             console.log("AI context and session created successfully.");
+            return { exists: true, loaded: true };
         } catch(e) {
             console.error("Fatal: Failed to load AI model or create a session:", e);
-            dialog.showErrorBox('AI Engine Error', `Failed to initialize the AI model. The analysis feature will be disabled. Please restart the app. Error: ${e.message}`);
-            // Ensure cleanup on failure
+            modelLoadError = e.message;
             cleanupAIResources();
+            return { exists: true, loaded: false, error: e.message };
         }
+    } else {
+        return { exists: false, loaded: false };
     }
 }
 
@@ -129,7 +132,7 @@ async function initializeApp() {
 
     createWindow();
     
-    // Load the model if it exists
+    // Load the model if it exists on startup
     loadModelAndCreateSession();
 }
 
@@ -149,8 +152,10 @@ app.on('activate', () => {
 
 // --- IPC Handlers for AI Model Management ---
 
-ipcMain.handle('check-model-exists', () => {
-    return fs.existsSync(modelPath);
+ipcMain.handle('get-initial-model-status', () => {
+    const exists = fs.existsSync(modelPath);
+    const loaded = !!(model && context);
+    return { exists, loaded, error: modelLoadError };
 });
 
 ipcMain.handle('download-model', async () => {
@@ -163,16 +168,23 @@ ipcMain.handle('download-model', async () => {
         await download(win, modelUrl, {
             directory: app.getPath('userData'),
             onProgress: (progress) => {
-                win.webContents.send('download-progress', progress);
+                if (win && !win.isDestroyed()) {
+                    win.webContents.send('download-progress', progress);
+                }
             },
         });
         
-        // Load the model and create session after download is complete
-        loadModelAndCreateSession();
+        const loadStatus = loadModelAndCreateSession();
+        if (win && !win.isDestroyed()) {
+            win.webContents.send('model-load-attempt-complete', loadStatus);
+        }
 
     } catch (e) {
         console.error("Model download failed:", e);
         dialog.showErrorBox("Download Error", `Failed to download the AI model. Please check your internet connection and try again. Error: ${e.message}`);
+         if (win && !win.isDestroyed()) {
+            win.webContents.send('model-load-attempt-complete', { loaded: false, error: e.message });
+        }
     }
 });
 
