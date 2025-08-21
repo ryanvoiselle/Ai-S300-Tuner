@@ -4,10 +4,10 @@ import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, L
 import { ExportActions } from './TuneExporter';
 
 const AdjustmentCard: React.FC<{ adjustment: Adjustment; type: 'Fuel' | 'Ignition' }> = ({ adjustment, type }) => (
-    <div className="bg-gray-700 p-4 rounded-lg">
+    <div className="bg-gray-800/50 border border-gray-700 p-4 rounded-lg">
         <div className="flex justify-between items-start">
             <div>
-                <p className="font-bold text-cyan-400">{adjustment.rpmRange}</p>
+                <p className="font-bold text-raceRed-400">{adjustment.rpmRange}</p>
                 <p className="text-sm text-gray-400">{adjustment.loadCondition}</p>
             </div>
             {type === 'Fuel' && adjustment.currentAFR && (
@@ -23,9 +23,9 @@ const AdjustmentCard: React.FC<{ adjustment: Adjustment; type: 'Fuel' | 'Ignitio
 );
 
 const ObservationCard: React.FC<{ observation: Observation }> = ({ observation }) => (
-    <div className="bg-gray-700 p-4 rounded-lg">
+    <div className="bg-gray-800/50 border border-gray-700 p-4 rounded-lg">
         <p className="font-semibold text-gray-200">{observation.observation}</p>
-        <p className="mt-1 text-cyan-400"><span className="font-bold">Recommendation:</span> {observation.recommendation}</p>
+        <p className="mt-1 text-raceRed-400"><span className="font-bold">Recommendation:</span> {observation.recommendation}</p>
     </div>
 );
 
@@ -40,17 +40,17 @@ const DatalogChart: React.FC<{data: DatalogRow[]}> = ({data}) => {
     return (
         <div className="mb-8">
             <h3 className="text-xl font-semibold mb-4 text-gray-200">Datalog Visualization</h3>
-            <div className="bg-gray-700 p-4 rounded-lg h-80 w-full">
+            <div className="bg-gray-800/50 border border-gray-700 p-4 rounded-lg h-80 w-full">
                  <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
                         <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
                         <XAxis dataKey="RPM" stroke="#A0AEC0" tick={{fontSize: 12}} label={{ value: 'RPM', position: 'insideBottom', offset: -5, fill: '#A0AEC0' }} />
-                        <YAxis yAxisId="left" stroke="#63B3ED" tick={{fontSize: 12}} />
-                        <YAxis yAxisId="right" orientation="right" stroke="#48BB78" tick={{fontSize: 12}}/>
+                        <YAxis yAxisId="left" stroke="#F87171" tick={{fontSize: 12}} />
+                        <YAxis yAxisId="right" orientation="right" stroke="#9CA3AF" tick={{fontSize: 12}}/>
                         <Tooltip contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #2D3748' }} />
                         <Legend wrapperStyle={{fontSize: "14px"}}/>
-                        <Line yAxisId="left" type="monotone" dataKey="AFR" stroke="#63B3ED" dot={false} name="AFR" />
-                        <Line yAxisId="right" type="monotone" dataKey="MAP" stroke="#48BB78" dot={false} name="MAP (psi/kPa)" />
+                        <Line yAxisId="left" type="monotone" dataKey="AFR" stroke="#F87171" dot={false} name="AFR" />
+                        <Line yAxisId="right" type="monotone" dataKey="MAP" stroke="#9CA3AF" dot={false} name="MAP (psi/kPa)" />
                     </LineChart>
                 </ResponsiveContainer>
             </div>

@@ -21,8 +21,8 @@ export const Simulator: React.FC<SimulatorProps> = ({ onGenerate, isLoading }) =
     };
 
     return (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg h-fit">
-            <h2 className="text-2xl font-bold mb-4 text-cyan-400">ECU Simulator / Test Environment</h2>
+        <div className="bg-gray-900/50 border border-gray-700 p-6 rounded-lg shadow-lg h-fit backdrop-blur-sm">
+            <h2 className="text-2xl font-bold mb-4 text-raceRed-400">ECU Simulator / Test Environment</h2>
             <p className="text-sm text-gray-400 mb-4">
                 Don't have a datalog? Generate a simulated one to test the AI's analysis capabilities on common tuning issues.
             </p>
@@ -35,7 +35,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ onGenerate, isLoading }) =
                         id="scenario-select"
                         value={selectedScenario}
                         onChange={(e) => setSelectedScenario(e.target.value as SimulationScenario)}
-                        className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 focus:ring-cyan-500 focus:border-cyan-500"
+                        className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-2 focus:ring-raceRed-500 focus:border-raceRed-500 transition"
                     >
                         {scenarios.map(s => (
                             <option key={s.id} value={s.id}>{s.name}</option>
@@ -46,7 +46,7 @@ export const Simulator: React.FC<SimulatorProps> = ({ onGenerate, isLoading }) =
                 <button
                     onClick={handleGenerateClick}
                     disabled={isLoading}
-                    className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out"
+                    className="w-full bg-simPurple-600 hover:bg-simPurple-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out"
                 >
                     Generate Test Data
                 </button>

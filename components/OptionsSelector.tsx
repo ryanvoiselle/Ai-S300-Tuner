@@ -1,4 +1,3 @@
-
 import React from 'react';
 import type { EngineType } from '../types';
 
@@ -15,7 +14,7 @@ export const OptionsSelector: React.FC<OptionsSelectorProps> = ({ selectedType, 
         <button
           onClick={() => onTypeChange('na')}
           className={`w-full py-2 px-4 rounded-lg transition-colors duration-200 font-semibold ${
-            selectedType === 'na' ? 'bg-cyan-500 text-white shadow-md' : 'bg-gray-700 hover:bg-gray-600'
+            selectedType === 'na' ? 'bg-raceRed-500 text-white shadow-md' : 'bg-gray-700 hover:bg-gray-600'
           }`}
         >
           Naturally Aspirated
@@ -23,7 +22,7 @@ export const OptionsSelector: React.FC<OptionsSelectorProps> = ({ selectedType, 
         <button
           onClick={() => onTypeChange('boosted')}
           className={`w-full py-2 px-4 rounded-lg transition-colors duration-200 font-semibold ${
-            selectedType === 'boosted' ? 'bg-cyan-500 text-white shadow-md' : 'bg-gray-700 hover:bg-gray-600'
+            selectedType === 'boosted' ? 'bg-raceRed-500 text-white shadow-md' : 'bg-gray-700 hover:bg-gray-600'
           }`}
         >
           Boosted

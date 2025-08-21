@@ -96,13 +96,13 @@ export const ExportActions: React.FC<ExportActionsProps> = ({ suggestions, engin
   };
 
   return (
-    <div className="mt-6 bg-gray-700/50 p-4 rounded-lg">
+    <div className="mt-6 bg-gray-800/50 border border-gray-700 p-4 rounded-lg">
        <h4 className="text-lg font-semibold text-gray-200">Export Actions</h4>
        <p className="text-sm text-gray-400 mt-1 mb-3">Download a detailed change log or a modified map file.</p>
        <div className="flex flex-col sm:flex-row gap-4">
             <button
                 onClick={handleDownloadTxt}
-                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center space-x-2"
+                className="w-full sm:w-auto bg-exportBlue-600 hover:bg-exportBlue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 ease-in-out flex items-center justify-center space-x-2"
             >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -112,7 +112,7 @@ export const ExportActions: React.FC<ExportActionsProps> = ({ suggestions, engin
             <button
                 onClick={handleDownloadSkl}
                 disabled={!baseMapFile || isModifying}
-                className="w-full sm:w-auto bg-green-600 hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition duration-300"
+                className="w-full sm:w-auto bg-ecuGreen-600 hover:bg-ecuGreen-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center space-x-2 transition duration-300"
             >
                 {isModifying ? <LoadingSpinner /> : (
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

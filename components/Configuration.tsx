@@ -43,7 +43,7 @@ export const Configuration: React.FC<ConfigurationProps> = (props) => {
                     rows={3}
                     value={props.engineSetup}
                     onChange={(e) => props.onEngineSetupChange(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-2 focus:ring-raceRed-500 focus:border-raceRed-500 transition"
                     placeholder="e.g., K20A2, stock block, BC Stage 2 cams, ID 1050x injectors"
                 ></textarea>
             </div>
@@ -54,7 +54,7 @@ export const Configuration: React.FC<ConfigurationProps> = (props) => {
                     rows={2}
                     value={props.turboSetup}
                     onChange={(e) => props.onTurboSetupChange(e.target.value)}
-                    className="w-full bg-gray-700 border border-gray-600 text-white rounded-lg p-2 focus:ring-cyan-500 focus:border-cyan-500"
+                    className="w-full bg-gray-700/50 border border-gray-600 text-white rounded-lg p-2 focus:ring-raceRed-500 focus:border-raceRed-500 transition"
                     placeholder="e.g., Garrett GTX3076R Gen II, 14psi, Sidewinder manifold"
                 ></textarea>
                  <p className="text-xs text-gray-500 mt-1">If naturally aspirated, you can mention intake, header, etc.</p>
