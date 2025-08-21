@@ -38,6 +38,16 @@ This is a desktop application that uses AI to analyze Hondata S300 datalogs and 
 
 That's it! The app will build itself and launch automatically.
 
+## Packaging for Distribution
+
+To create a standalone `.exe` file for Windows, run the following command:
+
+```bash
+npm run package
+```
+
+This will first build the frontend assets and then package the application. The output, including a portable `.exe` file, will be located in the `release/` directory.
+
 ## Getting a Gemini API Key
 
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
@@ -75,8 +85,9 @@ That's it! The app will build itself and launch automatically.
 
 - `npm start` - Build and run the app
 - `npm run build` - Build frontend assets only
+- `npm run package` - Package the application for distribution
 - `npm run dev` - Run in development mode
-- `npm run clean` - Clean build files
+- `npm run clean` - Clean build and release files
 
 ### Project Structure
 
@@ -88,6 +99,7 @@ That's it! The app will build itself and launch automatically.
 ├── services/            # Business logic
 ├── types.ts             # TypeScript definitions
 └── dist/                # Built assets (auto-generated)
+└── release/             # Packaged app (auto-generated)
 ```
 
 ## Important Notes

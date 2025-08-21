@@ -13,8 +13,9 @@
     "build:css": "tailwindcss -i ./styles/tailwind.css -o ./dist/tailwind.css",
     "build:js": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --format=iife --external:electron --define:process.env.NODE_ENV='\"production\"' --loader:.tsx=tsx --loader:.ts=tsx",
     "build": "npm run build:css && npm run build:js",
-    "clean": "rm -rf dist/ || rmdir /s dist\\",
-    "rebuild": "npm run clean && npm run build"
+    "clean": "rm -rf dist/ release/ || rmdir /s dist\\ release\\",
+    "rebuild": "npm run clean && npm run build",
+    "package": "npm run build && electron-builder --win --x64"
   },
   "dependencies": {
     "@google/genai": "^0.14.0",
@@ -29,7 +30,27 @@
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
+    "electron-builder": "^24.13.3",
     "esbuild": "^0.23.0",
     "tailwindcss": "^3.4.4"
+  },
+  "build": {
+    "appId": "com.hondata.ai-tuning-assistant",
+    "productName": "Hondata AI Tuning Assistant",
+    "files": [
+      "dist/**/*",
+      "electron.js",
+      "preload.js",
+      "index.html",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "portable"
+      ]
+    }
   }
 }
