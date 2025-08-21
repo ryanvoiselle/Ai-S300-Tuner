@@ -1,65 +1,14 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import type { EngineType, TuningSuggestions } from '../types';
 
-const API_KEY = process.env.API_KEY;
-if (!API_KEY) {
-    throw new Error("API_KEY environment variable not set");
-}
+const OLLAMA_API_URL = "http://localhost:11434/api/generate";
 
-const ai = new GoogleGenAI({ apiKey: API_KEY });
-
-const tuningResponseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        summary: {
-            type: Type.STRING,
-            description: "A brief, one-paragraph overview of the datalog, highlighting key findings based on the user's specific hardware.",
-        },
-        fuelAdjustments: {
-            type: Type.ARRAY,
-            description: "A list of suggestions for adjusting the fuel map.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    rpmRange: { type: Type.STRING, description: "e.g., 3000-4000 RPM" },
-                    loadCondition: { type: Type.STRING, description: "e.g., WOT / >10 psi boost / Light Cruise" },
-                    currentAFR: { type: Type.STRING, description: "The average Air-Fuel Ratio observed in this range." },
-                    targetAFR: { type: Type.STRING, description: "The recommended target Air-Fuel Ratio for this range." },
-                    suggestion: { type: Type.STRING, description: "e.g., Increase fuel by 5% in the high-speed fuel table cells corresponding to this range." },
-                    reason: { type: Type.STRING, description: "e.g., Current AFR is too lean under boost, risking engine damage." },
-                },
-                required: ["rpmRange", "loadCondition", "currentAFR", "targetAFR", "suggestion", "reason"]
-            }
-        },
-        ignitionAdjustments: {
-            type: Type.ARRAY,
-            description: "A list of suggestions for adjusting the ignition timing map.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    rpmRange: { type: Type.STRING, description: "e.g., 5000-6000 RPM" },
-                    loadCondition: { type: Type.STRING, description: "e.g., WOT / Peak Torque" },
-                    suggestion: { type: Type.STRING, description: "e.g., Retard timing by 1 degree in the high-speed ignition table." },
-                    reason: { type: Type.STRING, description: "e.g., To create a larger safety margin against knock with this turbo setup." },
-                },
-                required: ["rpmRange", "loadCondition", "suggestion", "reason"]
-            }
-        },
-        otherObservations: {
-            type: Type.ARRAY,
-            description: "A list of any other notable observations from the datalog.",
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    observation: { type: Type.STRING, description: "e.g., Injector duty cycle is approaching 90%." },
-                    recommendation: { type: Type.STRING, description: "e.g., The specified 550cc injectors may be insufficient for the target power level." },
-                },
-                required: ["observation", "recommendation"]
-            }
-        }
-    },
-    required: ["summary", "fuelAdjustments", "ignitionAdjustments", "otherObservations"]
-};
+// A simplified schema definition for the prompt, making it clear to the local model.
+const jsonSchemaString = `{
+    "summary": "string",
+    "fuelAdjustments": [{ "rpmRange": "string", "loadCondition": "string", "currentAFR": "string", "targetAFR": "string", "suggestion": "string", "reason": "string" }],
+    "ignitionAdjustments": [{ "rpmRange": "string", "loadCondition": "string", "suggestion": "string", "reason": "string" }],
+    "otherObservations": [{ "observation": "string", "recommendation": "string" }]
+}`;
 
 
 const buildPrompt = (datalog: string, engineType: EngineType, engineSetup: string, turboSetup: string): string => {
@@ -68,37 +17,28 @@ const buildPrompt = (datalog: string, engineType: EngineType, engineSetup: strin
     const targetAfrWot = isBoosted ? "11.0-11.5" : "12.8-13.2";
 
     const hardwareContext = `
-        The user has provided the following hardware information. Tailor your advice specifically for this setup.
+        User Hardware Information:
         - Engine Details: ${engineSetup || "Not specified."}
         - Turbo/Induction Setup: ${turboSetup || (isBoosted ? "Boosted setup not specified." : "Naturally Aspirated.")}
     `;
 
     return `
-        You are an expert engine tuner specializing in Honda B-series, D-series, and K-series engines using the Hondata S300 platform.
-        Analyze the provided datalog (in CSV format) in the context of the user's specific vehicle setup.
-        Assume the user is starting with a base calibration file (.skl) and needs to know which tables and cells to modify in the Hondata SManager software.
+        You are an expert engine tuner for Hondata systems. Your task is to analyze the provided CSV datalog based on the user's hardware.
+        Provide actionable tuning advice for the Hondata SManager software.
+        Your entire response must be a single, valid JSON object, without any markdown formatting, comments, or extra text.
+        The JSON object must conform to this structure: ${jsonSchemaString}
+
+        Tuning Goals:
+        - Safety first, then performance.
+        - Idle/Cruise AFR: ~14.7
+        - WOT AFR for ${engineTypeText}: ${targetAfrWot}
+        - Identify risky ignition timing.
+        - Check for high injector duty cycle (>85%).
+        - Correlate issues with the user's provided hardware.
 
         ${hardwareContext}
 
-        Your primary goals are to ensure engine safety and then optimize for performance.
-
-        Key Tuning Targets:
-        1.  Air-Fuel Ratio (AFR):
-            -   Idle/Light Cruise: Target ~14.7 AFR.
-            -   WOT (${engineTypeText}): Target ${targetAfrWot} AFR.
-        2.  Ignition Timing:
-            -   Identify areas that may be too aggressive (risking knock) or too conservative for the user's setup.
-            -   Suggest specific, conservative changes to timing tables (e.g., "Retard timing by 1-2 degrees in the high cam ignition map from 5000-7000 RPM under boost").
-        3.  Other Parameters:
-            -   Check injector duty cycle (over 85% is a concern).
-            -   Check for VTEC engagement issues.
-            -   Correlate findings with the user's hardware. For example, if injector duty is high, mention that their specified injectors might be too small.
-
-        Task:
-        Analyze the datalog below. Provide specific, actionable suggestions for adjusting fuel and ignition maps in SManager.
-        Reference specific tables (e.g., low-speed/high-speed fuel/ignition). Your response MUST be in the specified JSON format.
-
-        Datalog Content:
+        Analyze this datalog:
         \`\`\`csv
         ${datalog}
         \`\`\`
@@ -106,25 +46,60 @@ const buildPrompt = (datalog: string, engineType: EngineType, engineSetup: strin
 }
 
 export const getTuningSuggestions = async (datalog: string, engineType: EngineType, engineSetup: string, turboSetup: string): Promise<TuningSuggestions> => {
-    
     const prompt = buildPrompt(datalog, engineType, engineSetup, turboSetup);
 
-    const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: {
-            responseMimeType: "application/json",
-            responseSchema: tuningResponseSchema,
-        },
-    });
-
-    const jsonText = response.text.trim();
-    
     try {
-        const suggestions: TuningSuggestions = JSON.parse(jsonText);
+        const response = await fetch(OLLAMA_API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'llama3', // Assumes llama3 model is pulled
+                prompt: prompt,
+                format: 'json', // Ollama-specific parameter to ensure JSON output
+                stream: false,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Ollama API request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        
+        const jsonResponseString = data.response;
+        
+        if (!jsonResponseString) {
+             throw new Error("Ollama response did not contain a 'response' field.");
+        }
+
+        const suggestions: TuningSuggestions = JSON.parse(jsonResponseString);
         return suggestions;
+
     } catch (e) {
-        console.error("Failed to parse Gemini response as JSON:", jsonText);
-        throw new Error("AI response was not in the expected format.");
+        console.error("Failed to get tuning suggestions from local AI:", e);
+        if (e instanceof Error && e.message.toLowerCase().includes('failed to fetch')) {
+             throw new Error("Could not connect to the local AI server. Is Ollama running?");
+        }
+        throw new Error("Local AI response was invalid or could not be parsed.");
+    }
+};
+
+
+export const checkLocalAiStatus = async (): Promise<boolean> => {
+    try {
+        const response = await fetch("http://localhost:11434", { method: 'HEAD', mode: 'no-cors' });
+        // no-cors will result in an opaque response, but if it doesn't throw, the server is likely there.
+        // This is a workaround for simple health checks where reading the response isn't needed.
+        return true;
+    } catch (error) {
+         // A more reliable check, but can be blocked by CORS if Ollama isn't configured for it.
+        try {
+            const response = await fetch("http://localhost:11434");
+            return response.ok;
+        } catch(e) {
+            return false;
+        }
     }
 };

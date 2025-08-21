@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Configuration } from './components/Configuration';
 import { ResultsDisplay } from './components/ResultsDisplay';
@@ -6,10 +6,55 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { Disclaimer } from './components/Disclaimer';
 import { ECUConnector } from './components/ECUConnector';
 import { Simulator } from './components/Simulator';
-import { getTuningSuggestions } from './services/geminiService';
+import { getTuningSuggestions, checkLocalAiStatus } from './services/geminiService';
 import { generateSimulatedDatalog } from './services/simulationService';
 import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario } from './types';
 import Papa from 'papaparse';
+
+const LocalAIStatus: React.FC = () => {
+    const [isOnline, setIsOnline] = useState<boolean>(false);
+    const [isLoading, setIsLoading] = useState<boolean>(true);
+
+    useEffect(() => {
+        const checkStatus = async () => {
+            const status = await checkLocalAiStatus();
+            setIsOnline(status);
+            setIsLoading(false);
+        };
+
+        checkStatus(); // Check immediately on mount
+        const interval = setInterval(checkStatus, 10000); // And every 10 seconds
+
+        return () => clearInterval(interval); // Cleanup on unmount
+    }, []);
+
+    const getStatusIndicator = () => {
+        if (isLoading) {
+            return { color: 'bg-yellow-400', text: 'Checking...' };
+        }
+        return isOnline
+            ? { color: 'bg-ecuGreen-400', text: 'Connected' }
+            : { color: 'bg-raceRed-500', text: 'Disconnected' };
+    };
+
+    const { color, text } = getStatusIndicator();
+
+    return (
+        <div className="bg-gray-900/50 border border-gray-700 p-4 rounded-lg shadow-lg h-fit backdrop-blur-sm">
+            <h3 className="text-lg font-bold text-gray-200 mb-2">Local AI Status</h3>
+            <div className="flex items-center space-x-3">
+                <div className={`w-4 h-4 rounded-full ${color} ${isOnline ? 'animate-pulse' : ''}`}></div>
+                <span className="font-semibold">{text}</span>
+            </div>
+            {!isLoading && !isOnline && (
+                <p className="text-xs text-gray-400 mt-2">
+                    Could not connect to the Ollama server at <code className="bg-gray-700 p-1 rounded">localhost:11434</code>. Ensure Ollama is running with the 'llama3' model installed.
+                </p>
+            )}
+        </div>
+    );
+};
+
 
 const App: React.FC = () => {
   const [datalogFile, setDatalogFile] = useState<File | null>(null);
@@ -96,7 +141,11 @@ const App: React.FC = () => {
       setTuningSuggestions(suggestions);
     } catch (e) {
       console.error(e);
-      setError('Failed to get tuning suggestions. The AI model may be overloaded or an error occurred. Please try again.');
+      if (e instanceof Error) {
+        setError(e.message);
+      } else {
+        setError('An unknown error occurred while communicating with the local AI.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -131,6 +180,7 @@ const App: React.FC = () => {
                     {isLoading ? <LoadingSpinner /> : 'Analyze Datalog'}
                 </button>
             </div>
+            <LocalAIStatus />
             <Simulator onGenerate={handleGenerateSimulation} isLoading={isLoading} />
             <ECUConnector />
           </div>
