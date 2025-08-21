@@ -7,7 +7,7 @@
   "author": "YourName",
   "license": "MIT",
   "scripts": {
-    "start": "electron .",
+    "start": "electron electron.js",
     "build:css": "tailwindcss -i ./styles/tailwind.css -o ./dist/tailwind.css",
     "build:js": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --define:process.env.NODE_ENV='\"production\"'",
     "build": "npm run build:css && npm run build:js",

@@ -9,7 +9,7 @@ This is a desktop application that uses a local, offline AI model to analyze Hon
 -   **Datalog Analysis:** Upload `.csv` datalogs from Hondata SManager.
 -   **Base Map Integration:** Upload your `.skl` base map for more specific tuning advice.
 -   **AI-Powered Suggestions:** Get detailed feedback on fuel, ignition, and other engine parameters.
--   **Test Environment:** Generate simulated datalogs to test the AI's capabilities.
+-   **Test Environment:** Generate simulated datallogs to test the AI's capabilities.
 
 ---
 
@@ -32,7 +32,7 @@ Installation is simple. Just run the installer, and the application will handle 
 
 -   [Node.js](https://nodejs.org/) (which includes `npm`)
 
-### Setup
+### Setup & Build
 
 1.  **Clone the repository:**
     ```sh
@@ -41,21 +41,24 @@ Installation is simple. Just run the installer, and the application will handle 
     ```
 
 2.  **Install dependencies:**
+    This command will download all the necessary packages for the project.
     ```sh
     npm install
     ```
 
-### Running in Development Mode
-
-1.  **Build the application:** This is required to compile the CSS and TypeScript/React code.
+3.  **Build the application:**
+    This command compiles the application code and styles.
     ```sh
     npm run build
     ```
 
-2.  **Start the application:**
-    ```sh
-    npm start
-    ```
+### Running in Development Mode
+
+After the setup is complete, you can start the application:
+
+```sh
+npm start
+```
 
 ### Building the Executable
 

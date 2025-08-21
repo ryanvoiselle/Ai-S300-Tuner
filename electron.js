@@ -6,6 +6,8 @@ const { download } = require('electron-dl');
 let win;
 let LlamaModel, LlamaContext, LlamaChatSession;
 let model;
+let context;
+let session;
 
 const modelName = 'Meta-Llama-3-8B-Instruct.Q4_K_M.gguf';
 const modelUrl = `https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/${modelName}`;
@@ -27,6 +29,26 @@ function createWindow() {
   win.loadFile('index.html');
 }
 
+function loadModelAndCreateSession() {
+    if (fs.existsSync(modelPath)) {
+        try {
+            console.log("Loading AI model...");
+            model = new LlamaModel({ modelPath });
+            console.log("AI model loaded. Creating context and session...");
+            context = new LlamaContext({ model, contextSize: 4096 });
+            session = new LlamaChatSession({ context });
+            console.log("AI context and session created successfully.");
+        } catch(e) {
+            console.error("Fatal: Failed to load AI model or create a session:", e);
+            dialog.showErrorBox('AI Engine Error', `Failed to initialize the AI model. The analysis feature will be disabled. Please restart the app. Error: ${e.message}`);
+            model = null;
+            context = null;
+            session = null;
+        }
+    }
+}
+
+
 async function initializeApp() {
     try {
         // Dynamically import the ESM 'node-llama-cpp' module
@@ -44,13 +66,7 @@ async function initializeApp() {
     createWindow();
     
     // Load the model if it exists
-    if (fs.existsSync(modelPath)) {
-        try {
-            model = new LlamaModel({ modelPath });
-        } catch(e) {
-            console.error("Failed to load model:", e);
-        }
-    }
+    loadModelAndCreateSession();
 }
 
 app.whenReady().then(initializeApp);
@@ -87,8 +103,8 @@ ipcMain.handle('download-model', async () => {
             },
         });
         
-        // Load the model after download is complete
-        model = new LlamaModel({ modelPath });
+        // Load the model and create session after download is complete
+        loadModelAndCreateSession();
 
     } catch (e) {
         console.error("Model download failed:", e);
@@ -98,17 +114,21 @@ ipcMain.handle('download-model', async () => {
 
 
 ipcMain.handle('run-inference', async (event, prompt) => {
-    if (!model) {
-        return JSON.stringify({ error: "AI model is not loaded. Please download the model first." });
+    if (!model || !context) {
+        return JSON.stringify({ error: "AI model is not loaded or the context is not initialized. Please download the model or restart the application." });
     }
-     if (!LlamaContext || !LlamaChatSession) {
-        return JSON.stringify({ error: "AI engine components are not loaded correctly. Please restart the application." });
+    
+    if (!session) {
+        try {
+            console.log("No active session, creating a new one.");
+            session = new LlamaChatSession({ context });
+        } catch (e) {
+            console.error("Failed to create initial session:", e);
+            return JSON.stringify({ error: `Failed to create an AI session: ${e.message}. Please restart the application.` });
+        }
     }
     
     try {
-        const context = new LlamaContext({ model, contextSize: 4096 });
-        const session = new LlamaChatSession({ context });
-        
         const response = await session.prompt(prompt, {
             maxTokens: 2048,
             temperature: 0.2,
@@ -118,6 +138,27 @@ ipcMain.handle('run-inference', async (event, prompt) => {
 
     } catch (e) {
         console.error("Inference error:", e);
-        return JSON.stringify({ error: `An error occurred during AI analysis: ${e.message}` });
+        console.log("Attempting to recover from inference error...");
+
+        // Invalidate the failed session
+        session = null;
+
+        try {
+            // Tier 1 Recovery: Try to create a new session with the existing context
+            console.log("Resetting AI session...");
+            session = new LlamaChatSession({ context });
+            console.log("AI session has been successfully reset.");
+            return JSON.stringify({ error: `An error occurred during AI analysis: ${e.message}. The AI session was automatically reset. Please try again.` });
+        } catch (resetError) {
+            // Tier 2 Recovery: If session reset fails, do a full model reload
+            console.error("Failed to reset session, attempting full model reload.", resetError);
+            loadModelAndCreateSession(); 
+
+            if (model && session) {
+                 return JSON.stringify({ error: `A critical error occurred during analysis: ${e.message}. The entire AI engine has been reloaded. Please try your request again.` });
+            } else {
+                 return JSON.stringify({ error: `A critical error occurred: ${e.message}, and the AI engine could not be recovered. Please restart the application.` });
+            }
+        }
     }
 });
