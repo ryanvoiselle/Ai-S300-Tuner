@@ -1,7 +1,5 @@
 import type { EngineType, TuningSuggestions } from '../types';
 
-const OLLAMA_API_URL = "http://localhost:11434/api/generate";
-
 // A simplified schema definition for the prompt, making it clear to the local model.
 const jsonSchemaString = `{
     "summary": "string",
@@ -22,6 +20,7 @@ const buildPrompt = (datalog: string, engineType: EngineType, engineSetup: strin
         - Turbo/Induction Setup: ${turboSetup || (isBoosted ? "Boosted setup not specified." : "Naturally Aspirated.")}
     `;
 
+    // System prompt is now implicitly handled by the model choice and this detailed instruction set.
     return `
         You are an expert engine tuner for Hondata systems. Your task is to analyze the provided CSV datalog based on the user's hardware.
         Provide actionable tuning advice for the Hondata SManager software.
@@ -49,29 +48,10 @@ export const getTuningSuggestions = async (datalog: string, engineType: EngineTy
     const prompt = buildPrompt(datalog, engineType, engineSetup, turboSetup);
 
     try {
-        const response = await fetch(OLLAMA_API_URL, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                model: 'llama3', // Assumes llama3 model is pulled
-                prompt: prompt,
-                format: 'json', // Ollama-specific parameter to ensure JSON output
-                stream: false,
-            }),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Ollama API request failed with status ${response.status}`);
-        }
-
-        const data = await response.json();
-        
-        let jsonResponseString = data.response;
+        let jsonResponseString = await window.electronAPI.runInference(prompt);
         
         if (!jsonResponseString) {
-             throw new Error("Ollama response did not contain a 'response' field.");
+             throw new Error("Local AI response was empty.");
         }
 
         // Clean the response: find the first '{' and the last '}' to handle markdown/chattiness.
@@ -87,6 +67,10 @@ export const getTuningSuggestions = async (datalog: string, engineType: EngineTy
 
         try {
             const suggestions: TuningSuggestions = JSON.parse(jsonResponseString);
+            // Check for an error object returned from the main process
+            if ((suggestions as any).error) {
+                 throw new Error((suggestions as any).error);
+            }
             return suggestions;
         } catch (parseError) {
             console.error("Failed to parse cleaned JSON:", jsonResponseString);
@@ -96,24 +80,8 @@ export const getTuningSuggestions = async (datalog: string, engineType: EngineTy
     } catch (e) {
         console.error("Failed to get tuning suggestions from local AI:", e);
         if (e instanceof Error) {
-            if (e.message.toLowerCase().includes('failed to fetch')) {
-                throw new Error("Could not connect to the local AI server. Is Ollama running?");
-            }
-            // re-throw specific errors from the try block
-            throw e;
+            throw e; // Re-throw the specific error
         }
-        throw new Error("Local AI response was invalid or could not be parsed.");
-    }
-};
-
-
-export const checkLocalAiStatus = async (): Promise<boolean> => {
-    try {
-        // A simple GET request to the Ollama root is a reliable way to check if it's running.
-        const response = await fetch("http://localhost:11434");
-        return response.ok;
-    } catch (e) {
-        // Any failure to fetch (network error, server down) will be caught here.
-        return false;
+        throw new Error("An unknown error occurred during AI analysis.");
     }
 };

@@ -6,54 +6,101 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { Disclaimer } from './components/Disclaimer';
 import { ECUConnector } from './components/ECUConnector';
 import { Simulator } from './components/Simulator';
-import { getTuningSuggestions, checkLocalAiStatus } from './services/localAiService';
+import { getTuningSuggestions } from './services/localAiService';
 import { generateSimulatedDatalog } from './services/simulationService';
 import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario } from './types';
 import Papa from 'papaparse';
 
-const LocalAIStatus: React.FC = () => {
-    const [isOnline, setIsOnline] = useState<boolean>(false);
-    const [isLoading, setIsLoading] = useState<boolean>(true);
+// TypeScript augmentations for the preload script API
+export {};
+declare global {
+  interface Window {
+    electronAPI: {
+      checkModelExists: () => Promise<boolean>;
+      downloadModel: () => Promise<void>;
+      onDownloadProgress: (callback: (progress: { percent: number; totalBytes: number; }) => void) => void;
+      runInference: (prompt: string) => Promise<string>;
+    };
+  }
+}
+
+type ModelStatus = 'checking' | 'not_found' | 'downloading' | 'ready' | 'error';
+
+const AIModelManager: React.FC<{isModelReady: boolean; setIsModelReady: (isReady: boolean) => void;}> = ({isModelReady, setIsModelReady}) => {
+    const [status, setStatus] = useState<ModelStatus>('checking');
+    const [progress, setProgress] = useState(0);
+    const [totalSize, setTotalSize] = useState(0);
 
     useEffect(() => {
-        const checkStatus = async () => {
-            const status = await checkLocalAiStatus();
-            setIsOnline(status);
-            setIsLoading(false);
-        };
+        window.electronAPI.checkModelExists().then(exists => {
+            if (exists) {
+                setStatus('ready');
+                setIsModelReady(true);
+            } else {
+                setStatus('not_found');
+                setIsModelReady(false);
+            }
+        });
+        
+        window.electronAPI.onDownloadProgress(prog => {
+           setProgress(prog.percent);
+           if (!totalSize) {
+             setTotalSize(prog.totalBytes);
+           }
+        });
 
-        checkStatus(); // Check immediately on mount
-        const interval = setInterval(checkStatus, 10000); // And every 10 seconds
-
-        return () => clearInterval(interval); // Cleanup on unmount
     }, []);
 
-    const getStatusIndicator = () => {
-        if (isLoading) {
-            return { color: 'bg-yellow-400', text: 'Checking...' };
-        }
-        return isOnline
-            ? { color: 'bg-ecuGreen-400', text: 'Connected' }
-            : { color: 'bg-raceRed-500', text: 'Disconnected' };
-    };
+    const handleDownload = () => {
+        setStatus('downloading');
+        window.electronAPI.downloadModel().then(() => {
+            setStatus('ready');
+            setIsModelReady(true);
+        }).catch(() => {
+            setStatus('error');
+            setIsModelReady(false);
+        });
+    }
 
-    const { color, text } = getStatusIndicator();
+    const formatBytes = (bytes: number) => {
+        if (bytes === 0) return '0 B';
+        const i = Math.floor(Math.log(bytes) / Math.log(1024));
+        return `${parseFloat((bytes / Math.pow(1024, i)).toFixed(2))} ${['B', 'KB', 'MB', 'GB', 'TB'][i]}`;
+    }
 
     return (
         <div className="bg-gray-900/50 border border-gray-700 p-4 rounded-lg shadow-lg h-fit backdrop-blur-sm">
-            <h3 className="text-lg font-bold text-gray-200 mb-2">Local AI Status</h3>
-            <div className="flex items-center space-x-3">
-                <div className={`w-4 h-4 rounded-full ${color} ${isOnline ? 'animate-pulse' : ''}`}></div>
-                <span className="font-semibold">{text}</span>
-            </div>
-            {!isLoading && !isOnline && (
-                <p className="text-xs text-gray-400 mt-2">
-                    Could not connect to the Ollama server at <code className="bg-gray-700 p-1 rounded">localhost:11434</code>. Ensure Ollama is running with the 'llama3' model installed.
-                </p>
+            <h3 className="text-lg font-bold text-gray-200 mb-2">AI Model</h3>
+            {status === 'checking' && <p className="text-gray-400">Checking for local model...</p>}
+            {status === 'error' && <p className="text-red-400">An error occurred during download. Please restart the app and try again.</p>}
+            
+            {status === 'not_found' && (
+                <div>
+                    <p className="text-sm text-yellow-400 mb-3">The AI model (~4.7 GB) is not found. Please download it to enable analysis.</p>
+                    <button onClick={handleDownload} className="w-full bg-exportBlue-600 hover:bg-exportBlue-700 text-white font-bold py-2 px-4 rounded-lg transition">
+                        Download Model
+                    </button>
+                </div>
+            )}
+            
+            {status === 'downloading' && (
+                <div>
+                    <p className="text-sm text-gray-300 mb-2">Downloading... ({formatBytes(totalSize * progress)} / {formatBytes(totalSize)})</p>
+                    <div className="w-full bg-gray-700 rounded-full h-2.5">
+                        <div className="bg-exportBlue-600 h-2.5 rounded-full" style={{ width: `${progress * 100}%` }}></div>
+                    </div>
+                </div>
+            )}
+
+            {status === 'ready' && (
+                <div className="flex items-center space-x-3">
+                    <div className="w-4 h-4 rounded-full bg-ecuGreen-400"></div>
+                    <span className="font-semibold">Ready for Analysis</span>
+                </div>
             )}
         </div>
     );
-};
+}
 
 
 const App: React.FC = () => {
@@ -67,6 +114,7 @@ const App: React.FC = () => {
   const [datalogData, setDatalogData] = useState<DatalogRow[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isModelReady, setIsModelReady] = useState<boolean>(false);
 
   const processDatalogContent = (content: string) => {
     if (!content.includes('RPM') || !content.includes('MAP')) {
@@ -132,6 +180,10 @@ const App: React.FC = () => {
       setError('Please upload or generate a datalog file first.');
       return;
     }
+     if (!isModelReady) {
+      setError('The AI model is not ready. Please download it first.');
+      return;
+    }
     setIsLoading(true);
     setError(null);
     setTuningSuggestions(null);
@@ -144,12 +196,12 @@ const App: React.FC = () => {
       if (e instanceof Error) {
         setError(e.message);
       } else {
-        setError('An unknown error occurred while communicating with the local AI.');
+        setError('An unknown error occurred during AI analysis.');
       }
     } finally {
       setIsLoading(false);
     }
-  }, [datalogContent, engineType, engineSetup, turboSetup]);
+  }, [datalogContent, engineType, engineSetup, turboSetup, isModelReady]);
 
   return (
     <div className="min-h-screen bg-charcoal text-gray-200 font-sans p-4 sm:p-6 lg:p-8">
@@ -174,13 +226,13 @@ const App: React.FC = () => {
                 />
                 <button
                     onClick={handleAnalyze}
-                    disabled={!datalogContent || isLoading}
+                    disabled={!datalogContent || isLoading || !isModelReady}
                     className="w-full mt-6 bg-raceRed-500 hover:bg-raceRed-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 flex items-center justify-center shadow-lg shadow-raceRed-500/20"
                 >
                     {isLoading ? <LoadingSpinner /> : 'Analyze Datalog'}
                 </button>
             </div>
-            <LocalAIStatus />
+            <AIModelManager isModelReady={isModelReady} setIsModelReady={setIsModelReady} />
             <Simulator onGenerate={handleGenerateSimulation} isLoading={isLoading} />
             <ECUConnector />
           </div>
@@ -194,7 +246,7 @@ const App: React.FC = () => {
                     <div className="flex flex-col items-center justify-center h-full text-center">
                         <LoadingSpinner />
                         <p className="mt-4 text-lg text-gray-300">Analyzing datalog...</p>
-                        <p className="text-sm text-gray-400">The AI is reviewing your data against your hardware setup.</p>
+                        <p className="text-sm text-gray-400">The local AI is reviewing your data against your hardware setup.</p>
                     </div>
                 )}
 

@@ -8,10 +8,14 @@
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "build": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --define:process.env.NODE_ENV='\"development\"'",
+    "build:css": "tailwindcss -i ./styles/tailwind.css -o ./dist/tailwind.css",
+    "build:js": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --define:process.env.NODE_ENV='\"production\"'",
+    "build": "npm run build:css && npm run build:js",
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
+    "electron-dl": "^3.5.0",
+    "node-llama-cpp": "^2.3.11",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -23,16 +27,17 @@
     "@types/react-dom": "^18.3.0",
     "electron": "^31.0.1",
     "electron-builder": "^24.13.3",
-    "esbuild": "^0.20.2"
+    "esbuild": "^0.20.2",
+    "tailwindcss": "^3.4.4"
   },
   "build": {
     "appId": "com.example.hondataaituner",
     "productName": "HondataAITuningAssistant",
     "files": [
-      "**/*",
-      "!install.ps1",
-      "!README.md",
-      "dist/bundle.js"
+      "dist/**/*",
+      "electron.js",
+      "preload.js",
+      "index.html"
     ],
     "win": {
       "target": [
