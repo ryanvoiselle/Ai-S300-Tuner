@@ -13,33 +13,26 @@ This is a desktop application that uses a local, offline AI model to analyze Hon
 
 ---
 
-## For Users: Easy Installation (Windows)
+## Installation (Windows)
 
-A PowerShell script is provided to automate the entire setup process. This is the recommended method for most users.
+This application requires a local AI engine to be running on your computer. The installation is a simple two-step process.
 
-**Instructions:**
+### Step 1: Install the AI Engine (Ollama)
 
-1.  **Download:** Download the `install.ps1` script from the latest release on the [GitHub Releases page](https://github.com/your-username/your-repo/releases). (Replace the link with your actual repo).
-
-2.  **Run Script:**
-    *   Right-click the downloaded `install.ps1` file.
-    *   Select "**Run with PowerShell**".
-    *   You must approve any security prompts to allow the script to make changes.
-
-3.  **Troubleshooting Execution Policy:** If you get an error that scripts are disabled on your system, you may need to bypass the execution policy. You can do this by opening PowerShell as an Administrator and running this command:
-    ```powershell
-    Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+1.  Go to the official Ollama website: **[https://ollama.com/](https://ollama.com/)**
+2.  Click the "Download" button and run the installer for Windows.
+3.  Once installed, open a Command Prompt or PowerShell window and run the following command to download the `llama3` AI model. This may take some time depending on your internet connection.
+    ```sh
+    ollama pull llama3
     ```
-    Then, try running the `install.ps1` script again.
+4.  Leave Ollama running in the background. The application needs it to perform the analysis.
 
-**What the script does:**
+### Step 2: Install the Hondata AI Tuning Assistant
 
--   Downloads the latest version of the **Hondata AI Tuning Assistant**.
--   Downloads and installs **Ollama**, the local AI server.
--   Downloads the required `llama3` AI model.
--   Creates a desktop shortcut for the application.
-
-After the script finishes, you will have everything you need. Simply launch the application from your Start Menu.
+1.  Go to the [**GitHub Releases**](https://github.com/your-username/your-repo/releases) page for this project.
+2.  Download the latest installer, which will be named something like `HondataAITuningAssistant-Setup-1.0.0.exe`.
+3.  Run the installer. A shortcut will be created on your desktop and in your Start Menu.
+4.  Launch the application and start tuning!
 
 ---
 

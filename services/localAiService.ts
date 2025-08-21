@@ -68,19 +68,39 @@ export const getTuningSuggestions = async (datalog: string, engineType: EngineTy
 
         const data = await response.json();
         
-        const jsonResponseString = data.response;
+        let jsonResponseString = data.response;
         
         if (!jsonResponseString) {
              throw new Error("Ollama response did not contain a 'response' field.");
         }
 
-        const suggestions: TuningSuggestions = JSON.parse(jsonResponseString);
-        return suggestions;
+        // Clean the response: find the first '{' and the last '}' to handle markdown/chattiness.
+        const firstBracket = jsonResponseString.indexOf('{');
+        const lastBracket = jsonResponseString.lastIndexOf('}');
+        
+        if (firstBracket === -1 || lastBracket === -1) {
+            console.error("Malformed AI Response:", jsonResponseString);
+            throw new Error("Could not find a valid JSON object in the AI response.");
+        }
+
+        jsonResponseString = jsonResponseString.substring(firstBracket, lastBracket + 1);
+
+        try {
+            const suggestions: TuningSuggestions = JSON.parse(jsonResponseString);
+            return suggestions;
+        } catch (parseError) {
+            console.error("Failed to parse cleaned JSON:", jsonResponseString);
+            throw new Error("Local AI response was invalid or could not be parsed even after cleaning.");
+        }
 
     } catch (e) {
         console.error("Failed to get tuning suggestions from local AI:", e);
-        if (e instanceof Error && e.message.toLowerCase().includes('failed to fetch')) {
-             throw new Error("Could not connect to the local AI server. Is Ollama running?");
+        if (e instanceof Error) {
+            if (e.message.toLowerCase().includes('failed to fetch')) {
+                throw new Error("Could not connect to the local AI server. Is Ollama running?");
+            }
+            // re-throw specific errors from the try block
+            throw e;
         }
         throw new Error("Local AI response was invalid or could not be parsed.");
     }
