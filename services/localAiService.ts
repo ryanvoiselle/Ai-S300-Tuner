@@ -1,6 +1,6 @@
-import type { EngineType, TuningSuggestions, AIProvider } from '../types';
+import type { EngineType, TuningSuggestions } from '../types';
 
-const buildPrompts = (datalog: string, engineType: EngineType, engineSetup: string, turboSetup: string): { systemPrompt: string, userPrompt: string, prompt: string } => {
+const buildPrompts = (datalog: string, engineType: EngineType, engineSetup: string, turboSetup: string): { systemPrompt: string, userPrompt: string } => {
     const isBoosted = engineType === 'boosted';
     const engineTypeText = isBoosted ? "Boosted (Forced Induction)" : "Naturally Aspirated";
     const targetAfrWot = isBoosted ? "11.0-11.5" : "12.8-13.2";
@@ -29,48 +29,33 @@ Key Tuning Objectives:
         ${datalog}
         \`\`\`
     `;
-    
-    // For local model, we combine prompts
-    const combinedPrompt = `${systemPrompt}\n\n## Instructions\nAnalyze the following user request and datalog. Provide your response as a valid JSON object matching the required schema.\n\n## User Request\n${userPrompt}`;
 
-    return { systemPrompt, userPrompt: userPrompt, prompt: combinedPrompt };
+    return { systemPrompt, userPrompt };
 };
 
 export const getTuningSuggestions = async (
     datalog: string,
     engineType: EngineType,
     engineSetup: string,
-    turboSetup: string,
-    provider: AIProvider
+    turboSetup: string
 ): Promise<TuningSuggestions> => {
 
-    const prompts = buildPrompts(datalog, engineType, engineSetup, turboSetup);
-
     try {
-        const rawResponse = await window.electronAPI.runInference({
-            provider,
-            ...prompts
+        const result = await window.electronAPI.runAiAnalysis({
+            datalog,
+            engineType,
+            engineSetup,
+            turboSetup,
         });
         
-        if (!rawResponse) {
-             throw new Error("AI response was empty.");
+        if (result.success && result.suggestions) {
+            return result.suggestions;
         }
         
-        try {
-            // The backend should return a clean JSON string.
-            const suggestions: TuningSuggestions = JSON.parse(rawResponse);
-            // Check for an error message returned within the JSON
-            if ((suggestions as any).error) {
-                 throw new Error((suggestions as any).error);
-            }
-            return suggestions;
-        } catch (parseError) {
-            console.error("Original AI Response:", rawResponse);
-            throw new Error("AI response was invalid or could not be parsed. Check the application logs for more details.");
-        }
+        throw new Error(result.error || "AI analysis failed or returned no suggestions.");
 
     } catch (e) {
-        console.error(`Failed to get tuning suggestions from AI provider (${provider}):`, e);
+        console.error(`Failed to get tuning suggestions from AI:`, e);
         if (e instanceof Error) {
             throw e;
         }

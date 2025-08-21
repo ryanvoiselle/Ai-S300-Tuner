@@ -1,4 +1,3 @@
-
 import React, { useMemo } from 'react';
 import type { TuningSuggestions, Adjustment, Observation, DatalogRow, EngineType } from '../types';
 import { ResponsiveContainer, LineChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line } from 'recharts';

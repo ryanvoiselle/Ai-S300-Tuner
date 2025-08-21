@@ -10,7 +10,7 @@
   "scripts": {
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "build:css": "tailwindcss -i ./styles/tailwind.css -o ./dist/tailwind.css",
+    "build:css": "tailwindcss -i ./styles/tailwind.css -o ./dist/tailwind.css --watch",
     "build:js": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --format=iife --external:electron --define:process.env.NODE_ENV='\"production\"' --loader:.tsx=tsx --loader:.ts=tsx",
     "build": "npm run build:css && npm run build:js",
     "clean": "rm -rf dist/ || rmdir /s dist\\",

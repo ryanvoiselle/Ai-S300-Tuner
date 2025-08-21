@@ -9,363 +9,311 @@
 // See the README.md file for more detailed instructions.
 // ===================================================================================
 
-const { app, BrowserWindow, ipcMain, dialog, net } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const util = require('util'); // For log formatting
-const { download } = require('electron-dl');
-const { OAuth2Client } = require('google-auth-library');
+const util = require('util');
 const { GoogleGenAI, Type } = require('@google/genai');
 
-// --- Google OAuth Configuration ---
-// IMPORTANT: In a production application, these values should be stored securely
-// and not hardcoded. For example, use environment variables or a secure config service.
-const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com'; // <-- REPLACE THIS
-const GOOGLE_CLIENT_SECRET = 'YOUR_GOOGLE_CLIENT_SECRET'; // <-- REPLACE THIS
-const REDIRECT_URI = 'http://localhost:5858/callback'; // A local redirect URI
-
-let oauth2Client;
-let userProfile = null; // To store user's profile info
-
 // --- Start of Logging Implementation ---
-// Setup a log file in the user's data directory.
-const logFilePath = path.join(app.getPath('userData'), 'app.log');
-// Use a write stream to append to the log file.
-const logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
-
-// Keep the original console functions.
+let logStream;
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
-// Override console.log
-console.log = function (...args) {
-    // Format the message with a timestamp and log level.
-    const message = `[${new Date().toISOString()}] [INFO] ${util.format.apply(null, args)}\n`;
-    // Write to the log file.
-    logStream.write(message);
-    // Also write to the original console (useful for development).
-    originalConsoleLog.apply(console, args);
-};
+function setupLogging() {
+    const logFilePath = path.join(app.getPath('userData'), 'app.log');
+    logStream = fs.createWriteStream(logFilePath, { flags: 'a' });
 
-// Override console.error
-console.error = function (...args) {
-    // Format the message with a timestamp and log level.
-    const message = `[${new Date().toISOString()}] [ERROR] ${util.format.apply(null, args)}\n`;
-    // Write to the log file.
-    logStream.write(message);
-    // Also write to the original console.
-    originalConsoleError.apply(console, args);
-};
+    console.log = function (...args) {
+        const message = `[${new Date().toISOString()}] [INFO] ${util.format.apply(null, args)}\n`;
+        logStream.write(message);
+        originalConsoleLog.apply(console, args);
+    };
 
-// Catch unhandled exceptions and log them before crashing.
-process.on('uncaughtException', (error) => {
-    console.error('--- UNCAUGHT EXCEPTION ---');
-    console.error(error);
-    console.error('--- END UNCAUGHT EXCEPTION ---');
-    // The log will be written before the process terminates.
-    // It's important to exit after an uncaught exception as the app state is unknown.
-    process.exit(1);
-});
+    console.error = function (...args) {
+        const message = `[${new Date().toISOString()}] [ERROR] ${util.format.apply(null, args)}\n`;
+        logStream.write(message);
+        originalConsoleError.apply(console, args);
+    };
+
+    process.on('uncaughtException', (error) => {
+        console.error('--- UNCAUGHT EXCEPTION ---');
+        console.error(error);
+        console.error('--- END UNCAUGHT EXCEPTION ---');
+        process.exit(1);
+    });
+}
 // --- End of Logging Implementation ---
 
 
 let win;
-let LlamaModel;
-let model;
-let modelLoadError = null; // Store any errors during model loading
 
-const modelName = 'Meta-Llama-3-8B-Instruct.Q4_K_M.gguf';
-const modelUrl = `https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/${modelName}`;
-const modelPath = path.join(app.getPath('userData'), modelName);
-
+// Store AI provider configurations
+let aiConfig = {
+    geminiApiKey: null,
+    localModelPath: null,
+    currentProvider: 'cloud' // Start with cloud provider as default
+};
 
 function createWindow() {
-  win = new BrowserWindow({
-    width: 1280,
-    height: 900,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, 'preload.js'),
-    },
-    icon: path.join(__dirname, 'build/icon.ico')
-  });
+    win = new BrowserWindow({
+        width: 1280,
+        height: 900,
+        webPreferences: {
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js'),
+        },
+        show: false // Don't show until ready
+    });
 
-  win.loadFile('index.html');
+    win.loadFile('index.html');
+
+    win.once('ready-to-show', () => {
+        win.show();
+        console.log('Application window shown successfully');
+    });
+
+    win.on('closed', () => {
+        win = null;
+    });
+
+    win.webContents.setWindowOpenHandler(({ url }) => {
+        shell.openExternal(url);
+        return { action: 'deny' };
+    });
 }
 
-function cleanupAIResources() {
-    console.log("Cleaning up existing AI resources...");
-    model = null;
-}
+function checkRequiredFiles() {
+    const requiredFiles = [
+        'index.html',
+        'dist/bundle.js',
+        'dist/tailwind.css',
+        'preload.js'
+    ];
 
-/**
- * A simplified function to load the AI model into memory.
- * This is called on startup and after a successful download.
- */
-function loadModel() {
-    cleanupAIResources();
-    modelLoadError = null; // Reset error on new load attempt
-
-    if (fs.existsSync(modelPath)) {
-        try {
-            console.log("Loading AI model from path:", modelPath);
-            model = new LlamaModel({ modelPath });
-            console.log("AI model loaded successfully.");
-            return { exists: true, loaded: true };
-        } catch(e) {
-            console.error("Fatal: Failed to load AI model:", e);
-            modelLoadError = e.message;
-            cleanupAIResources(); // Ensure partial loads are cleared
-            return { exists: true, loaded: false, error: e.message };
-        }
-    } else {
-        console.log("AI model file not found at path:", modelPath);
-        return { exists: false, loaded: false };
+    const missingFiles = requiredFiles.filter(file => !fs.existsSync(path.join(__dirname, file)));
+    
+    if (missingFiles.length > 0) {
+        const message = `Missing required files: ${missingFiles.join(', ')}\n\nPlease run "npm run build" first.`;
+        dialog.showErrorBox('Build Required', message);
+        console.error('Missing files:', missingFiles);
+        return false;
     }
+    return true;
 }
-
 
 async function initializeApp() {
-    oauth2Client = new OAuth2Client(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, REDIRECT_URI);
-
-    try {
-        // Dynamically import the ESM 'node-llama-cpp' module
-        const llamaModule = await import('node-llama-cpp');
-        LlamaModel = llamaModule.LlamaModel;
-    } catch (e) {
-        console.error('Failed to load node-llama-cpp:', e);
-        dialog.showErrorBox('Fatal Error', `Failed to initialize the AI engine. The application cannot start. Error: ${e.message}`);
+    console.log('Initializing Hondata AI Tuning Assistant...');
+    setupLogging();
+    
+    if (!checkRequiredFiles()) {
         app.quit();
         return;
     }
 
     createWindow();
-    
-    // Load the model if it exists on startup
-    loadModel();
+    console.log('Application initialized successfully');
 }
 
 app.whenReady().then(initializeApp);
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+    if (process.platform !== 'darwin') {
+        app.quit();
+    }
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
-  }
-});
-
-// --- IPC Handlers for AI Model Management ---
-
-ipcMain.handle('get-initial-model-status', () => {
-    const exists = fs.existsSync(modelPath);
-    const loaded = !!model;
-    return { exists, loaded, error: modelLoadError };
-});
-
-ipcMain.handle('download-model', async () => {
-    if (!win) return;
-    if (!LlamaModel) {
-        dialog.showErrorBox("Error", "AI engine is not initialized. Cannot download model.");
-        return;
-    }
-    try {
-        await download(win, modelUrl, {
-            directory: app.getPath('userData'),
-            onProgress: (progress) => {
-                if (win && !win.isDestroyed()) {
-                    win.webContents.send('download-progress', progress);
-                }
-            },
-        });
-        
-        const loadStatus = loadModel();
-        if (win && !win.isDestroyed()) {
-            win.webContents.send('model-load-attempt-complete', loadStatus);
-        }
-
-    } catch (e) {
-        console.error("Model download failed:", e);
-        dialog.showErrorBox("Download Error", `Failed to download the AI model. Please check your internet connection and try again. Error: ${e.message}`);
-         if (win && !win.isDestroyed()) {
-            win.webContents.send('model-load-attempt-complete', { loaded: false, error: e.message });
-        }
+    if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
     }
 });
 
-// --- IPC Handlers for Google Auth ---
+// --- IPC Handlers for AI Configuration ---
 
-ipcMain.handle('google-signin', () => {
-  return new Promise((resolve, reject) => {
-    const authUrl = oauth2Client.generateAuthUrl({
-      access_type: 'offline', // 'offline' gets a refresh token
-      scope: ['https://www.googleapis.com/auth/userinfo.profile', 'https://www.googleapis.com/auth/userinfo.email', 'https://www.googleapis.com/auth/generative-language.tuning'],
-    });
-
-    const authWindow = new BrowserWindow({
-      width: 500,
-      height: 600,
-      show: true,
-      webPreferences: { nodeIntegration: false, contextIsolation: true },
-      parent: win,
-      modal: true
-    });
-
-    authWindow.loadURL(authUrl);
-
-    const onWillNavigate = async (event, url) => {
-      if (url.startsWith(REDIRECT_URI)) {
-        event.preventDefault(); // Stop the navigation
-        authWindow.close();
-
-        const code = new URL(url).searchParams.get('code');
-        try {
-          const { tokens } = await oauth2Client.getToken(code);
-          oauth2Client.setCredentials(tokens);
-          
-          // Get user profile
-          const profileResponse = await oauth2Client.request({
-            url: 'https://www.googleapis.com/oauth2/v3/userinfo'
-          });
-          userProfile = profileResponse.data;
-          
-          console.log("Google sign-in successful for:", userProfile.email);
-          resolve({
-            isSignedIn: true,
-            user: { name: userProfile.name, email: userProfile.email, picture: userProfile.picture }
-          });
-        } catch (error) {
-          console.error('Failed to exchange code for tokens:', error);
-          reject(error);
-        }
-      }
+ipcMain.handle('get-ai-config', () => {
+    return {
+        hasGeminiKey: !!aiConfig.geminiApiKey,
+        hasLocalModel: !!aiConfig.localModelPath && fs.existsSync(aiConfig.localModelPath),
+        currentProvider: aiConfig.currentProvider
     };
-
-    authWindow.webContents.on('will-navigate', onWillNavigate);
-    authWindow.on('closed', () => {
-        // If the window is closed without getting a code, resolve as not signed in
-        if (!userProfile) {
-            resolve({ isSignedIn: false });
-        }
-    });
-  });
 });
 
-
-ipcMain.handle('google-signout', async () => {
-    if (oauth2Client.credentials.access_token) {
-        // This revokes the token. User will have to re-consent next time.
-        await oauth2Client.revokeCredentials();
+ipcMain.handle('set-gemini-key', async (event, apiKey) => {
+    if (!apiKey || typeof apiKey !== 'string') {
+        return { success: false, error: 'Invalid API key' };
     }
-    oauth2Client.setCredentials(null);
-    userProfile = null;
-    console.log("User signed out.");
-    return { isSignedIn: false };
+    
+    aiConfig.geminiApiKey = apiKey;
+    console.log('Gemini API key configured');
+    return { success: true };
 });
 
+ipcMain.handle('set-ai-provider', async (event, provider) => {
+    if (!['cloud', 'local'].includes(provider)) {
+        return { success: false, error: 'Invalid provider' };
+    }
+    
+    aiConfig.currentProvider = provider;
+    console.log(`AI provider set to: ${provider}`);
+    return { success: true };
+});
 
-ipcMain.handle('get-auth-status', () => {
-    if (userProfile) {
+// --- AI Inference Handler ---
+ipcMain.handle('run-ai-analysis', async (event, { datalog, engineType, engineSetup, turboSetup }) => {
+    console.log(`Running AI analysis with provider: ${aiConfig.currentProvider}`);
+    
+    try {
+        if (aiConfig.currentProvider === 'cloud') {
+            if (!aiConfig.geminiApiKey) {
+                throw new Error('Gemini API key not configured. Please set it in the AI Settings.');
+            }
+            return await runCloudAnalysis(datalog, engineType, engineSetup, turboSetup);
+        } else {
+             throw new Error('Local AI model not available yet. Please use the Cloud AI provider.');
+        }
+    } catch (error) {
+        console.error('AI analysis failed:', error);
         return {
-            isSignedIn: true,
-            user: { name: userProfile.name, email: userProfile.email, picture: userProfile.picture }
+            success: false,
+            error: error.message || 'An unknown AI analysis error occurred.'
         };
     }
-    return { isSignedIn: false };
 });
 
-// --- Unified Inference Handler ---
+// Cloud-based analysis using Gemini API
+async function runCloudAnalysis(datalog, engineType, engineSetup, turboSetup) {
+    const { systemPrompt, userPrompt } = buildAnalysisPrompt(datalog, engineType, engineSetup, turboSetup);
 
-const tuningSuggestionsSchema = {
-    type: Type.OBJECT,
-    properties: {
-        summary: { type: Type.STRING, description: "A brief summary of the overall health of the engine tune based on the datalog." },
-        fuelAdjustments: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    rpmRange: { type: Type.STRING, description: "e.g., '3000-4500 RPM'" },
-                    loadCondition: { type: Type.STRING, description: "e.g., 'Wide Open Throttle' or 'Light Cruise'" },
-                    currentAFR: { type: Type.STRING, description: "The observed Air-Fuel Ratio." },
-                    targetAFR: { type: Type.STRING, description: "The recommended target Air-Fuel Ratio." },
-                    suggestion: { type: Type.STRING, description: "e.g., 'Increase fuel by 3-5%'" },
-                    reason: { type: Type.STRING, description: "Why the change is needed, e.g., 'Running lean, risk of knock.'" }
+    const tuningSuggestionsSchema = {
+        type: Type.OBJECT,
+        properties: {
+            summary: { type: Type.STRING, description: "A brief summary of the overall health of the engine tune based on the datalog." },
+            fuelAdjustments: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        rpmRange: { type: Type.STRING, description: "e.g., '3000-4500 RPM'" },
+                        loadCondition: { type: Type.STRING, description: "e.g., 'Wide Open Throttle' or 'Light Cruise'" },
+                        currentAFR: { type: Type.STRING, description: "The observed Air-Fuel Ratio." },
+                        targetAFR: { type: Type.STRING, description: "The recommended target Air-Fuel Ratio." },
+                        suggestion: { type: Type.STRING, description: "e.g., 'Increase fuel by 3-5%'" },
+                        reason: { type: Type.STRING, description: "Why the change is needed, e.g., 'Running lean, risk of knock.'" }
+                    }
                 }
-            }
-        },
-        ignitionAdjustments: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    rpmRange: { type: Type.STRING },
-                    loadCondition: { type: Type.STRING },
-                    suggestion: { type: Type.STRING },
-                    reason: { type: Type.STRING }
+            },
+            ignitionAdjustments: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        rpmRange: { type: Type.STRING },
+                        loadCondition: { type: Type.STRING },
+                        suggestion: { type: Type.STRING },
+                        reason: { type: Type.STRING }
+                    }
                 }
-            }
-        },
-        otherObservations: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.OBJECT,
-                properties: {
-                    observation: { type: Type.STRING, description: "A specific observation, e.g., 'High injector duty cycle.'" },
-                    recommendation: { type: Type.STRING, description: "What to do about the observation." }
+            },
+            otherObservations: {
+                type: Type.ARRAY,
+                items: {
+                    type: Type.OBJECT,
+                    properties: {
+                        observation: { type: Type.STRING, description: "A specific observation, e.g., 'High injector duty cycle.'" },
+                        recommendation: { type: Type.STRING, description: "What to do about the observation." }
+                    }
                 }
             }
         }
+    };
+    
+    try {
+        console.log("Running Gemini inference...");
+        const ai = new GoogleGenAI({ apiKey: aiConfig.geminiApiKey });
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: { parts: [{ text: userPrompt }] },
+            config: {
+                systemInstruction: systemPrompt,
+                responseMimeType: "application/json",
+                responseSchema: tuningSuggestionsSchema,
+            },
+        });
+
+        const suggestions = JSON.parse(response.text);
+        return {
+            success: true,
+            suggestions: suggestions
+        };
+
+    } catch (e) {
+        console.error("Gemini inference error:", e);
+        throw new Error(`Gemini API Error: ${e.message}`);
     }
-};
+}
 
 
-ipcMain.handle('run-inference', async (event, { prompt, provider, systemPrompt, userPrompt }) => {
-    if (provider === 'local') {
-        if (!model) {
-            return JSON.stringify({ error: "Local AI model is not loaded. Please download the model or restart the application if loading failed." });
-        }
-        
-        try {
-            console.log("Running local inference...");
-            const response = await model.createCompletion({
-                prompt: prompt,
-                maxTokens: 4096,
-                temperature: 0.2,
-            });
-            return response.choices[0].text;
-        } catch (e) {
-            console.error("Local inference error:", e);
-            return JSON.stringify({ error: `An error occurred during local AI analysis: ${e.message}. Please try again.` });
-        }
-    } else if (provider === 'gemini') {
-        if (!oauth2Client || !oauth2Client.credentials.access_token) {
-             return JSON.stringify({ error: "You are not signed in. Please sign in with Google to use the Gemini API." });
-        }
-        try {
-            console.log("Running Gemini inference...");
-            const ai = new GoogleGenAI({ authClient: oauth2Client });
-            const response = await ai.models.generateContent({
-                model: "gemini-2.5-flash",
-                contents: { parts: [{ text: userPrompt }] },
-                config: {
-                    systemInstruction: systemPrompt,
-                    responseMimeType: "application/json",
-                    responseSchema: tuningSuggestionsSchema,
-                },
-            });
+function buildAnalysisPrompt(datalog, engineType, engineSetup, turboSetup) {
+    const isBoosted = engineType === 'boosted';
+    const engineTypeText = isBoosted ? "Boosted (Forced Induction)" : "Naturally Aspirated";
+    const targetAfrWot = isBoosted ? "11.0-11.5" : "12.8-13.2";
 
-            return response.text; // This will be a validated JSON string
-        } catch (e) {
-            console.error("Gemini inference error:", e);
-            return JSON.stringify({ error: `An error occurred with the Gemini API: ${e.message}` });
-        }
-    } else {
-        return JSON.stringify({ error: `Unknown AI provider: ${provider}` });
+    const systemPrompt = `You are an expert engine tuner specializing in Hondata S300 systems. Your task is to analyze the provided CSV datalog and user hardware information, then provide actionable tuning advice.
+Your entire response must be a JSON object that conforms to the schema provided.
+
+Key Tuning Objectives:
+- Prioritize engine safety above all else.
+- Target an idle and light cruise Air-Fuel Ratio (AFR) of approximately 14.7.
+- For a ${engineTypeText} engine, target a Wide Open Throttle (WOT) AFR between ${targetAfrWot}.
+- Analyze ignition timing for signs of being too aggressive (risk of knock) or too conservative (loss of power).
+- Monitor injector duty cycle and flag if it exceeds a safe threshold of 85%.
+- Consider the user's hardware setup in all recommendations. For example, larger injectors might explain low duty cycles, or a large turbo might explain boost lag.`;
+
+    const userPrompt = `
+        Please analyze the following datalog based on my hardware setup.
+
+        ## User Hardware Information:
+        - **Engine Type**: ${engineTypeText}
+        - **Engine Details**: ${engineSetup || "Not specified."}
+        - **Turbo/Induction Setup**: ${turboSetup || (isBoosted ? "Boosted setup details not provided." : "Naturally Aspirated.")}
+
+        ## Datalog (CSV Content):
+        \`\`\`csv
+        ${datalog}
+        \`\`\`
+    `;
+
+    return { systemPrompt, userPrompt };
+}
+
+
+// --- File Operations ---
+ipcMain.handle('save-file', async (event, options) => {
+    const result = await dialog.showSaveDialog(win, options);
+    return result;
+});
+
+ipcMain.handle('write-file', async (event, filePath, data) => {
+    try {
+        fs.writeFileSync(filePath, data);
+        return { success: true };
+    } catch (error) {
+        console.error('File write error:', error);
+        return { success: false, error: error.message };
     }
 });
+
+// --- App Info ---
+ipcMain.handle('get-app-info', () => {
+    const logFilePath = path.join(app.getPath('userData'), 'app.log');
+    return {
+        version: app.getVersion(),
+        name: app.getName(),
+        userDataPath: app.getPath('userData'),
+        logPath: logFilePath
+    };
+});
+
+console.log('Electron main process loaded successfully');
