@@ -14,34 +14,32 @@ const buildPrompt = (datalog: string, engineType: EngineType, engineSetup: strin
     const engineTypeText = isBoosted ? "Boosted (Forced Induction)" : "Naturally Aspirated";
     const targetAfrWot = isBoosted ? "11.0-11.5" : "12.8-13.2";
 
-    const hardwareContext = `
+    const systemPrompt = `You are an expert engine tuner for Hondata systems. Your task is to analyze the provided CSV datalog and user hardware information.
+Provide actionable tuning advice for the Hondata SManager software.
+Your entire response must be a single, valid JSON object, without any markdown formatting, comments, or extra text.
+The JSON object must conform to this structure: ${jsonSchemaString}
+
+Tuning Goals:
+- Safety first, then performance.
+- Idle/Cruise AFR: ~14.7
+- WOT AFR for ${engineTypeText}: ${targetAfrWot}
+- Identify risky ignition timing.
+- Check for high injector duty cycle (>85%).
+- Correlate issues with the user's provided hardware.`;
+
+    const userPrompt = `
         User Hardware Information:
         - Engine Details: ${engineSetup || "Not specified."}
         - Turbo/Induction Setup: ${turboSetup || (isBoosted ? "Boosted setup not specified." : "Naturally Aspirated.")}
-    `;
-
-    // System prompt is now implicitly handled by the model choice and this detailed instruction set.
-    return `
-        You are an expert engine tuner for Hondata systems. Your task is to analyze the provided CSV datalog based on the user's hardware.
-        Provide actionable tuning advice for the Hondata SManager software.
-        Your entire response must be a single, valid JSON object, without any markdown formatting, comments, or extra text.
-        The JSON object must conform to this structure: ${jsonSchemaString}
-
-        Tuning Goals:
-        - Safety first, then performance.
-        - Idle/Cruise AFR: ~14.7
-        - WOT AFR for ${engineTypeText}: ${targetAfrWot}
-        - Identify risky ignition timing.
-        - Check for high injector duty cycle (>85%).
-        - Correlate issues with the user's provided hardware.
-
-        ${hardwareContext}
 
         Analyze this datalog:
         \`\`\`csv
         ${datalog}
         \`\`\`
     `;
+
+    // Using the official Llama 3 Instruct prompt format
+    return `<|begin_of_text|><|start_header_id|>system<|end_header_id|>\n\n${systemPrompt}<|eot_id|><|start_header_id|>user<|end_header_id|>\n\n${userPrompt}<|eot_id|><|start_header_id|>assistant<|end_header_id|>\n\n`;
 }
 
 /**

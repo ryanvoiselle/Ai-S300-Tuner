@@ -58,10 +58,8 @@ process.on('uncaughtException', (error) => {
 
 
 let win;
-let LlamaModel, LlamaContext, LlamaChatSession;
+let LlamaModel;
 let model;
-let context;
-let session;
 let modelLoadError = null; // Store any errors during model loading
 
 const modelName = 'Meta-Llama-3-8B-Instruct.Q4_K_M.gguf';
@@ -86,31 +84,31 @@ function createWindow() {
 
 function cleanupAIResources() {
     console.log("Cleaning up existing AI resources...");
-    session = null;
-    context = null;
     model = null;
 }
 
-function loadModelAndCreateSession() {
+/**
+ * A simplified function to load the AI model into memory.
+ * This is called on startup and after a successful download.
+ */
+function loadModel() {
     cleanupAIResources();
     modelLoadError = null; // Reset error on new load attempt
 
     if (fs.existsSync(modelPath)) {
         try {
-            console.log("Loading AI model...");
+            console.log("Loading AI model from path:", modelPath);
             model = new LlamaModel({ modelPath });
-            console.log("AI model loaded. Creating context and session...");
-            context = new LlamaContext({ model, contextSize: 8192 });
-            session = new LlamaChatSession({ context });
-            console.log("AI context and session created successfully.");
+            console.log("AI model loaded successfully.");
             return { exists: true, loaded: true };
         } catch(e) {
-            console.error("Fatal: Failed to load AI model or create a session:", e);
+            console.error("Fatal: Failed to load AI model:", e);
             modelLoadError = e.message;
-            cleanupAIResources();
+            cleanupAIResources(); // Ensure partial loads are cleared
             return { exists: true, loaded: false, error: e.message };
         }
     } else {
+        console.log("AI model file not found at path:", modelPath);
         return { exists: false, loaded: false };
     }
 }
@@ -121,8 +119,6 @@ async function initializeApp() {
         // Dynamically import the ESM 'node-llama-cpp' module
         const llamaModule = await import('node-llama-cpp');
         LlamaModel = llamaModule.LlamaModel;
-        LlamaContext = llamaModule.LlamaContext;
-        LlamaChatSession = llamaModule.LlamaChatSession;
     } catch (e) {
         console.error('Failed to load node-llama-cpp:', e);
         dialog.showErrorBox('Fatal Error', `Failed to initialize the AI engine. The application cannot start. Error: ${e.message}`);
@@ -133,7 +129,7 @@ async function initializeApp() {
     createWindow();
     
     // Load the model if it exists on startup
-    loadModelAndCreateSession();
+    loadModel();
 }
 
 app.whenReady().then(initializeApp);
@@ -154,7 +150,7 @@ app.on('activate', () => {
 
 ipcMain.handle('get-initial-model-status', () => {
     const exists = fs.existsSync(modelPath);
-    const loaded = !!(model && context);
+    const loaded = !!model;
     return { exists, loaded, error: modelLoadError };
 });
 
@@ -174,7 +170,7 @@ ipcMain.handle('download-model', async () => {
             },
         });
         
-        const loadStatus = loadModelAndCreateSession();
+        const loadStatus = loadModel();
         if (win && !win.isDestroyed()) {
             win.webContents.send('model-load-attempt-complete', loadStatus);
         }
@@ -188,53 +184,28 @@ ipcMain.handle('download-model', async () => {
     }
 });
 
-
+/**
+ * A simplified, stateless inference handler.
+ */
 ipcMain.handle('run-inference', async (event, prompt) => {
-    if (!model || !context) {
-        return JSON.stringify({ error: "AI model is not loaded or the context is not initialized. Please download the model or restart the application." });
-    }
-    
-    if (!session) {
-        try {
-            console.log("No active session, creating a new one.");
-            session = new LlamaChatSession({ context });
-        } catch (e) {
-            console.error("Failed to create initial session:", e);
-            return JSON.stringify({ error: `Failed to create an AI session: ${e.message}. Please restart the application.` });
-        }
+    if (!model) {
+        return JSON.stringify({ error: "AI model is not loaded. Please download the model or restart the application if loading failed." });
     }
     
     try {
-        const response = await session.prompt(prompt, {
-            maxTokens: 4096, // Increased token limit for larger analysis
+        console.log("Running inference...");
+        const response = await model.createCompletion({
+            prompt: prompt,
+            maxTokens: 4096,
             temperature: 0.2,
+            // stop: ["<|eot_id|>"], // Llama3-instruct specific stop token
         });
 
-        return response;
+        return response.choices[0].text;
 
     } catch (e) {
         console.error("Inference error:", e);
-        console.log("Attempting to recover from inference error...");
-
-        // Invalidate the failed session
-        session = null;
-
-        try {
-            // Tier 1 Recovery: Try to create a new session with the existing context
-            console.log("Resetting AI session...");
-            session = new LlamaChatSession({ context });
-            console.log("AI session has been successfully reset.");
-            return JSON.stringify({ error: `An error occurred during AI analysis: ${e.message}. The AI session was automatically reset. Please try again.` });
-        } catch (resetError) {
-            // Tier 2 Recovery: If session reset fails, do a full model reload
-            console.error("Failed to reset session, attempting full model reload.", resetError);
-            loadModelAndCreateSession(); 
-
-            if (model && session) {
-                 return JSON.stringify({ error: `A critical error occurred during analysis: ${e.message}. The entire AI engine has been reloaded. Please try your request again.` });
-            } else {
-                 return JSON.stringify({ error: `A critical error occurred: ${e.message}, and the AI engine could not be recovered. Please restart the application.` });
-            }
-        }
+        // No complex recovery needed. The model object is still valid for the next attempt.
+        return JSON.stringify({ error: `An error occurred during AI analysis: ${e.message}. Please try again.` });
     }
 });
