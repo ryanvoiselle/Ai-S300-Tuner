@@ -2,17 +2,6 @@ export type EngineType = 'na' | 'boosted';
 
 export type SimulationScenario = 'leanWot' | 'richCruise' | 'highDuty' | 'knock';
 
-export type AIProvider = 'local' | 'gemini';
-
-export interface AuthStatus {
-  isSignedIn: boolean;
-  user?: {
-    name: string;
-    email: string;
-    picture: string;
-  }
-}
-
 export interface Adjustment {
   rpmRange: string;
   loadCondition: string;
@@ -46,8 +35,32 @@ export interface DatalogRow {
   [key: string]: number | undefined; // Allow other numeric columns
 }
 
-export interface AIModelStatus {
-  exists: boolean;
-  loaded: boolean;
-  error?: string;
+export type AIProvider = 'local' | 'gemini';
+
+export interface AuthUser {
+  name: string;
+  email: string;
+  picture: string;
+}
+
+export interface AuthStatus {
+  isSignedIn: boolean;
+  user?: AuthUser | null;
+}
+
+export interface ElectronAPI {
+  getInitialModelStatus: () => Promise<{ exists: boolean; loaded: boolean; error?: string | null }>;
+  downloadModel: () => Promise<void>;
+  onDownloadProgress: (callback: (progress: { percent: number; totalBytes: number; }) => void) => void;
+  onModelLoadAttemptComplete: (callback: (status: { loaded: boolean; error?: string; }) => void) => void;
+  googleSignIn: () => Promise<AuthStatus>;
+  googleSignOut: () => Promise<AuthStatus>;
+  getAuthStatus: () => Promise<AuthStatus>;
+  runInference: (args: { provider: AIProvider; prompt?: string; systemPrompt?: string; userPrompt?: string; }) => Promise<string>;
+}
+
+declare global {
+  interface Window {
+    electronAPI: ElectronAPI;
+  }
 }

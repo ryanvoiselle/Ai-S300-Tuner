@@ -1,55 +1,34 @@
 {
   "name": "hondata-ai-tuning-assistant",
   "version": "1.0.0",
-  "description": "A desktop application that uses a local AI to analyze Hondata S300 datalogs and provide tuning advice.",
+  "description": "A desktop application that uses local and cloud AI to analyze Hondata S300 datalogs and provide tuning advice.",
   "main": "electron.js",
+  "type": "commonjs",
   "homepage": "./",
   "author": "YourName",
   "license": "MIT",
   "scripts": {
-    "start": "electron electron.js",
+    "start": "electron .",
     "build:css": "tailwindcss -i ./styles/tailwind.css -o ./dist/tailwind.css",
-    "build:js": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --define:process.env.NODE_ENV='\"production\"'",
-    "build": "npm run build:css && npm run build:js",
-    "dist": "npm run build && electron-builder"
+    "build:js": "esbuild index.tsx --bundle --outfile=dist/bundle.js --platform=browser --format=iife --external:electron --define:process.env.NODE_ENV='\"production\"'",
+    "build": "npm run build:css && npm run build:js"
   },
   "dependencies": {
-    "@google/genai": "^0.16.0",
-    "electron-dl": "^3.5.0",
-    "google-auth-library": "^9.11.0",
-    "node-llama-cpp": "^2.3.11",
     "papaparse": "^5.4.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "recharts": "^2.12.7"
+    "recharts": "^2.12.7",
+    "google-auth-library": "^9.11.0",
+    "@google/genai": "^0.15.0",
+    "node-llama-cpp": "^3.2.0"
   },
   "devDependencies": {
     "@types/papaparse": "^5.3.14",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
-    "electron": "^31.0.1",
-    "electron-builder": "^24.13.3",
-    "esbuild": "^0.20.2",
+    "electron": "^31.2.1",
+    "electron-dl": "^3.5.0",
+    "esbuild": "^0.23.0",
     "tailwindcss": "^3.4.4"
-  },
-  "build": {
-    "appId": "com.example.hondataaituner",
-    "productName": "HondataAITuningAssistant",
-    "files": [
-      "dist/**/*",
-      "electron.js",
-      "preload.js",
-      "index.html"
-    ],
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "build/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    }
   }
 }
