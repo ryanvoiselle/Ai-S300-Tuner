@@ -1,3 +1,14 @@
+// ===================================================================================
+// IMPORTANT: This file is the main entry point for the Electron application.
+// It is NOT a standalone script and should not be executed directly by double-clicking.
+//
+// TO RUN THE APP FROM SOURCE:
+// 1. Open a command prompt or terminal in the project's root directory.
+// 2. Run the command: npm start
+//
+// See the README.md file for more detailed instructions.
+// ===================================================================================
+
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
@@ -72,21 +83,31 @@ function createWindow() {
   win.loadFile('index.html');
 }
 
+function cleanupAIResources() {
+    console.log("Cleaning up existing AI resources...");
+    session = null;
+    context = null;
+    model = null;
+}
+
 function loadModelAndCreateSession() {
+    // Ensure any previous instances are garbage collected before creating new ones.
+    cleanupAIResources();
+
     if (fs.existsSync(modelPath)) {
         try {
             console.log("Loading AI model...");
             model = new LlamaModel({ modelPath });
             console.log("AI model loaded. Creating context and session...");
-            context = new LlamaContext({ model, contextSize: 4096 });
+            // Increased context size to handle larger datalogs and prompts
+            context = new LlamaContext({ model, contextSize: 8192 });
             session = new LlamaChatSession({ context });
             console.log("AI context and session created successfully.");
         } catch(e) {
             console.error("Fatal: Failed to load AI model or create a session:", e);
             dialog.showErrorBox('AI Engine Error', `Failed to initialize the AI model. The analysis feature will be disabled. Please restart the app. Error: ${e.message}`);
-            model = null;
-            context = null;
-            session = null;
+            // Ensure cleanup on failure
+            cleanupAIResources();
         }
     }
 }
@@ -173,7 +194,7 @@ ipcMain.handle('run-inference', async (event, prompt) => {
     
     try {
         const response = await session.prompt(prompt, {
-            maxTokens: 2048,
+            maxTokens: 4096, // Increased token limit for larger analysis
             temperature: 0.2,
         });
 

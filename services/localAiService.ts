@@ -44,26 +44,41 @@ const buildPrompt = (datalog: string, engineType: EngineType, engineSetup: strin
     `;
 }
 
+/**
+ * Extracts a JSON object from a string, handling markdown code blocks and other text.
+ * @param str The string potentially containing a JSON object.
+ * @returns The cleaned JSON string, or the original string if no structure is found.
+ */
+const extractJsonFromString = (str: string): string => {
+    // 1. Attempt to find a JSON block enclosed in ```json ... ```
+    const jsonBlockMatch = str.match(/```json\s*([\s\S]*?)\s*```/);
+    if (jsonBlockMatch && jsonBlockMatch[1]) {
+        return jsonBlockMatch[1];
+    }
+
+    // 2. If no markdown block, find the outermost JSON object
+    const firstBracket = str.indexOf('{');
+    const lastBracket = str.lastIndexOf('}');
+    if (firstBracket !== -1 && lastBracket > firstBracket) {
+        return str.substring(firstBracket, lastBracket + 1);
+    }
+    
+    // 3. If no clear JSON structure, return the original string for the parser to handle
+    return str;
+};
+
+
 export const getTuningSuggestions = async (datalog: string, engineType: EngineType, engineSetup: string, turboSetup: string): Promise<TuningSuggestions> => {
     const prompt = buildPrompt(datalog, engineType, engineSetup, turboSetup);
 
     try {
-        let jsonResponseString = await window.electronAPI.runInference(prompt);
+        const rawResponse = await window.electronAPI.runInference(prompt);
         
-        if (!jsonResponseString) {
+        if (!rawResponse) {
              throw new Error("Local AI response was empty.");
         }
 
-        // Clean the response: find the first '{' and the last '}' to handle markdown/chattiness.
-        const firstBracket = jsonResponseString.indexOf('{');
-        const lastBracket = jsonResponseString.lastIndexOf('}');
-        
-        if (firstBracket === -1 || lastBracket === -1) {
-            console.error("Malformed AI Response:", jsonResponseString);
-            throw new Error("Could not find a valid JSON object in the AI response.");
-        }
-
-        jsonResponseString = jsonResponseString.substring(firstBracket, lastBracket + 1);
+        const jsonResponseString = extractJsonFromString(rawResponse);
 
         try {
             const suggestions: TuningSuggestions = JSON.parse(jsonResponseString);
@@ -73,6 +88,7 @@ export const getTuningSuggestions = async (datalog: string, engineType: EngineTy
             }
             return suggestions;
         } catch (parseError) {
+            console.error("Original AI Response:", rawResponse);
             console.error("Failed to parse cleaned JSON:", jsonResponseString);
             throw new Error("Local AI response was invalid or could not be parsed even after cleaning.");
         }
