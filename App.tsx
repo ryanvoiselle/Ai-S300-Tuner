@@ -6,6 +6,7 @@ import { LoadingSpinner } from './components/LoadingSpinner';
 import { Disclaimer } from './components/Disclaimer';
 import { Simulator } from './components/Simulator';
 import { AISettings } from './components/AISettings';
+import { ECUConnector } from './components/ECUConnector';
 import { generateSimulatedDatalog } from './services/simulationService';
 import type { EngineType, TuningSuggestions, DatalogRow, SimulationScenario, AIProvider } from './types';
 import Papa from 'papaparse';
@@ -207,6 +208,8 @@ const App: React.FC = () => {
             />
             
             <Simulator onGenerate={handleGenerateSimulation} isLoading={isLoading} />
+
+            <ECUConnector />
           </div>
 
           <div className="lg:col-span-8">

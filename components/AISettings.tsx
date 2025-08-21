@@ -166,7 +166,7 @@ export const AISettings: React.FC<AISettingsProps> = ({
             <strong>How to get a Gemini API key:</strong>
           </p>
           <ol className="text-xs text-gray-400 mt-1 space-y-1">
-            <li>1. Visit <span className="text-exportBlue-400">https://makersuite.google.com/app/apikey</span></li>
+            <li>1. Visit <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-exportBlue-400 underline">Google AI Studio</a></li>
             <li>2. Sign in with your Google account</li>
             <li>3. Click "Create API Key"</li>
             <li>4. Copy and paste the key above</li>

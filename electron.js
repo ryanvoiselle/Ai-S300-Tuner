@@ -13,7 +13,6 @@ const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const util = require('util');
-const { GoogleGenAI, Type } = require('@google/genai');
 
 // --- Start of Logging Implementation ---
 let logStream;
@@ -184,6 +183,9 @@ ipcMain.handle('run-ai-analysis', async (event, { datalog, engineType, engineSet
 
 // Cloud-based analysis using Gemini API
 async function runCloudAnalysis(datalog, engineType, engineSetup, turboSetup) {
+    // Dynamically import the ES Module
+    const { GoogleGenAI, Type } = await import('@google/genai');
+
     const { systemPrompt, userPrompt } = buildAnalysisPrompt(datalog, engineType, engineSetup, turboSetup);
 
     const tuningSuggestionsSchema = {
